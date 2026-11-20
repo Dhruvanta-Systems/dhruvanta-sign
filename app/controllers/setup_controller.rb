@@ -7,6 +7,13 @@ class SetupController < ApplicationController
 
   before_action :redirect_to_root_if_signed, if: :signed_in?
   before_action :ensure_first_user_not_created!
+  before_action :require_setup_token!, only: :create
+
+  # When SETUP_TOKEN is set, the first-run form also needs it. Without it, the first
+  # visitor to a fresh public deployment becomes its administrator.
+  def self.setup_token_required?
+    ENV['SETUP_TOKEN'].to_s.strip.present?
+  end
 
   def index
     @account = Account.new(account_params)
@@ -68,6 +75,15 @@ class SetupController < ApplicationController
 
   def redirect_to_root_if_signed
     redirect_to root_path, notice: I18n.t('you_are_already_signed_in')
+  end
+
+  def require_setup_token!
+    return unless self.class.setup_token_required?
+
+    expected = ENV['SETUP_TOKEN'].to_s.strip
+    return if ActiveSupport::SecurityUtils.secure_compare(params[:setup_token].to_s, expected)
+
+    redirect_to setup_index_path, alert: 'The setup token is not correct.'
   end
 
   def ensure_first_user_not_created!
