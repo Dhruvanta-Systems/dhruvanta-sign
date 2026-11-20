@@ -1,7 +1,14 @@
 # frozen_string_literal: true
 
-class EmbedFormController < ActionController::Base
+class EmbedFormController < ApplicationController
   layout 'embed'
+
+  # Same public, slug-keyed access as the signer page. Deriving from
+  # ApplicationController (instead of ActionController::Base) also gives the
+  # shared form view its helpers; without them the embedded form failed to render.
+  skip_before_action :authenticate_user!
+  skip_before_action :maybe_redirect_to_setup
+  skip_authorization_check
 
   def show
     @submitter = Submitter.find_by!(slug: params[:slug])

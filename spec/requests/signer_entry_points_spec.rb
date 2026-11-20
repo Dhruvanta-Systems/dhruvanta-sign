@@ -12,7 +12,7 @@ RSpec.describe 'Signer entry points and submission state' do
   let(:author) { create(:user, account:) }
   let(:template) { create(:template, account:, author:, submitter_count: 1, only_field_types: %w[text signature]) }
   let(:submission) { create(:submission, :with_submitters, template:) }
-  let(:submitter) { submission.submitters.first }
+  let!(:submitter) { submission.submitters.first }
 
   close_states = {
     'completed' => ->(ctx) { ctx.submitter.update!(completed_at: Time.current) },
@@ -96,7 +96,8 @@ RSpec.describe 'Signer entry points and submission state' do
 
   describe 'GET /p/:slug (signature pad)' do
     it 'renders while the link is open' do
-      get "/p/#{submitter.slug}"
+      field = template.fields.find { |f| f['type'] == 'signature' }
+      get "/p/#{submitter.slug}", params: { f: field['uuid'] }
 
       expect(response).to have_http_status(:ok)
     end

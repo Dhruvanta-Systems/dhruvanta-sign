@@ -4,12 +4,7 @@
   <%= form_with url: settings_sms_path, method: :post, class: 'space-y-4' do %>
     <div class="form-control">
       <label class="label"><span class="label-text font-medium">Provider</span></label>
-      <select name="encrypted_config[value][provider]" class="base-select max-w-xs">
-        <option value="">Select provider...</option>
-        <option value="twilio" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'twilio' %>>Twilio</option>
-        <option value="msg91" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'msg91' %>>MSG91</option>
-        <option value="webhook" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'webhook' %>>Custom Webhook</option>
-      </select>
+      <%= select_tag 'encrypted_config[value][provider]', options_for_select([['Twilio', 'twilio'], ['MSG91', 'msg91'], ['Custom Webhook', 'webhook']], (sms_config.value['provider'] if sms_config.value.is_a?(Hash))), include_blank: 'Select provider...', class: 'base-select max-w-xs' %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">Account SID / Auth Key</span></label>
@@ -33,12 +28,7 @@
   <%= form_with url: settings_sms_path(config_key: 'whatsapp_configs'), method: :post, class: 'space-y-4' do %>
     <div class="form-control">
       <label class="label"><span class="label-text font-medium">Provider</span></label>
-      <select name="encrypted_config[value][provider]" class="base-select max-w-xs">
-        <option value="">Select provider...</option>
-        <option value="gupshup" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'gupshup' %>>Gupshup</option>
-        <option value="twilio" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'twilio' %>>Twilio</option>
-        <option value="webhook" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'webhook' %>>Custom Webhook</option>
-      </select>
+      <%= select_tag 'encrypted_config[value][provider]', options_for_select([['Gupshup', 'gupshup'], ['Twilio', 'twilio'], ['Custom Webhook', 'webhook']], (wa_config.value['provider'] if wa_config.value.is_a?(Hash))), include_blank: 'Select provider...', class: 'base-select max-w-xs' %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">API Key / Account SID</span></label>

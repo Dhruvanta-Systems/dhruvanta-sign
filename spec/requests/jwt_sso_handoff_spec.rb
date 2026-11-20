@@ -207,12 +207,12 @@ describe 'JWT SSO handoff receiver' do
     end
 
     it 'rejects a replayed jti within the replay window with 409 sso-handoff-jti-replayed' do
-      token = mint_token(jti: 'replayed-jti')
-
-      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
+      post '/api/auth/sso-handoff', params: { token: mint_token(jti: 'replayed-jti'), state: @state }, as: :json
       expect(response).to have_http_status(:ok)
 
-      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
+      # The same jti again, in a fresh browser flow, so the state check passes.
+      start_flow
+      post '/api/auth/sso-handoff', params: { token: mint_token(jti: 'replayed-jti'), state: @state }, as: :json
       expect(response).to have_http_status(:conflict)
       expect(response.parsed_body['code']).to eq('sso-handoff-jti-replayed')
     end
@@ -240,12 +240,14 @@ describe 'JWT SSO handoff receiver' do
 
     it 'rejects a long-lived token replayed after the old 90 second window' do
       now = Time.now.utc.to_i
-      token = mint_token(iat: now, exp: now + 290, jti: 'long-lived')
-      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
+      post '/api/auth/sso-handoff', params: { token: mint_token(iat: now, exp: now + 290, jti: 'long-lived'),
+                                              state: @state }, as: :json
       expect(response).to have_http_status(:ok)
 
+      start_flow
       travel_to(200.seconds.from_now) do
-        post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
+        post '/api/auth/sso-handoff', params: { token: mint_token(iat: now, exp: now + 290, jti: 'long-lived'),
+                                                state: @state }, as: :json
       end
 
       expect(response).to have_http_status(:conflict)
@@ -280,7 +282,7 @@ describe 'JWT SSO handoff receiver' do
 
     it 'rejects a token without a tier when an allow-list is configured' do
       claims = { iss: issuer, sub: SecureRandom.uuid, aud: audience, email: 'a@example.com',
-                 iat: Time.now.utc.to_i, exp: Time.now.utc.to_i + 30, jti: SecureRandom.uuid }
+                 iat: Time.now.utc.to_i, exp: Time.now.utc.to_i + 30, jti: SecureRandom.uuid, nonce: @state }
       token = JWT.encode(claims, @ec_key, 'ES256', { kid: @kid, typ: 'JWT' })
 
       post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
@@ -392,7 +394,9 @@ describe 'JWT SSO handoff receiver' do
     end
 
     it 'is filtered out of the logs' do
-      expect(Rails.application.config.filter_parameters).to include(:token)
+      filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+
+      expect(filtered.filter('token' => 'eyJhbGciOi.payload.signature')['token']).to eq('[FILTERED]')
     end
   end
 end
