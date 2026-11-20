@@ -35,26 +35,6 @@ module PremiumBridge
     end
   end
 
-  def create_checkout(payload)
-    return unless enabled?
-
-    safe_request(default_response: {}) do
-      connection.post('/api/subscriptions/checkout') do |req|
-        req.body = JSON.generate(normalize_request_payload(payload))
-      end
-    end
-  end
-
-  def cancel_subscription(payload)
-    return unless enabled?
-
-    safe_request(default_response: {}) do
-      connection.post('/api/subscriptions/cancel') do |req|
-        req.body = JSON.generate(normalize_request_payload(payload))
-      end
-    end
-  end
-
   def create_video_kyc_session(payload)
     return {} unless enabled?
 

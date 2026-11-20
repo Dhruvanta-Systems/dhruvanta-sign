@@ -235,7 +235,7 @@ Rails.application.routes.draw do
       end
     end
     resource :account, only: %i[show update destroy]
-    resources :subscriptions, only: %i[index create destroy]
+    resources :subscriptions, only: %i[index]
     resources :profile, only: %i[index] do
       collection do
         patch :update_contact

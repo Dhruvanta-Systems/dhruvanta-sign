@@ -15,60 +15,6 @@ describe PremiumBridge do
     reset_premium_bridge!
   end
 
-  describe '.create_checkout' do
-    let(:payload) do
-      {
-        account_id: 42,
-        plan: 'pro',
-        provider: 'razorpay',
-        email: 'owner@example.test'
-      }
-    end
-
-    it 'returns nil when the premium service is not configured' do
-      ENV.delete('PREMIUM_SERVICE_URL')
-
-      expect(described_class.create_checkout(payload)).to be_nil
-    end
-
-    it 'returns an empty response when the premium service rejects checkout creation' do
-      configure_premium_service
-      stub_request(:post, 'https://premium.example.test/api/subscriptions/checkout')
-        .to_return(status: 503, body: JSON.generate(error: 'provider_unavailable'))
-
-      expect(described_class.create_checkout(payload)).to eq({})
-    end
-
-    it 'returns an empty response when the premium service cannot be reached' do
-      configure_premium_service
-      stub_request(:post, 'https://premium.example.test/api/subscriptions/checkout')
-        .to_timeout
-
-      expect(described_class.create_checkout(payload)).to eq({})
-    end
-
-    it 'returns the normalized checkout response from the premium service' do
-      configure_premium_service
-      stub_request(:post, 'https://premium.example.test/api/subscriptions/checkout')
-        .with(
-          body: JSON.generate(payload.transform_keys(&:to_s)),
-          headers: {
-            'Content-Type' => 'application/json',
-            'X-Premium-Token' => 'test-premium-token'
-          }
-        )
-        .to_return(
-          status: 200,
-          headers: { 'Content-Type' => 'application/json' },
-          body: JSON.generate(':checkout_url' => 'https://checkout.example.test/session')
-        )
-
-      expect(described_class.create_checkout(payload)).to eq({
-                                                               'checkout_url' => 'https://checkout.example.test/session'
-                                                             })
-    end
-  end
-
   describe 'path segments' do
     before { configure_premium_service }
 
@@ -105,5 +51,12 @@ describe PremiumBridge do
     PremiumBridge.instance_variable_set(:@connection, nil)
     PremiumBridge.instance_variable_set(:@failure_count, 0)
     PremiumBridge.instance_variable_set(:@circuit_open_at, nil)
+  end
+
+  describe 'removed purchase calls' do
+    it 'has no checkout or cancellation call left' do
+      expect(described_class).not_to respond_to(:create_checkout)
+      expect(described_class).not_to respond_to(:cancel_subscription)
+    end
   end
 end

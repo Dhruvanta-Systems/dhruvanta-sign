@@ -10,85 +10,53 @@ describe 'Subscriptions settings' do
     sign_in(user)
   end
 
-  it 'shows free plan state for inactive premium subscriptions' do
-    allow(PremiumBridge).to receive(:plan_for).with(account.id).and_return({
-                                                                             'plan' => 'free',
-                                                                             'status' => 'cancelled',
-                                                                             'features' => {}
-                                                                           })
+  def stub_plan(plan, status: 'active')
+    allow(PremiumBridge).to receive(:plan_for).with(account.id)
+                                              .and_return({ 'plan' => plan, 'status' => status, 'features' => {} })
+  end
+
+  it 'shows the free plan when the premium service reports an inactive subscription' do
+    stub_plan('free', status: 'cancelled')
 
     get settings_subscriptions_path
 
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include('Current plan:', 'Free')
+    expect(response.body).to include('Free')
   end
 
-  it 'does not show a checkout success message until the premium service confirms the upgraded plan' do
-    allow(PremiumBridge).to receive(:plan_for).with(account.id).and_return({
-                                                                             'plan' => 'free',
-                                                                             'status' => 'cancelled',
-                                                                             'features' => {}
-                                                                           })
+  it 'shows the plan the operator granted' do
+    stub_plan('pro')
 
-    get settings_subscriptions_path, params: { upgraded: 'pro' }
+    get settings_subscriptions_path
 
-    expect(response).to have_http_status(:ok)
-    expect(response.body).not_to include('Plan activated successfully.')
+    expect(response.body).to include('Pro')
   end
 
-  it 'shows a checkout success message after the premium service confirms the upgraded plan' do
-    allow(PremiumBridge).to receive(:plan_for).with(account.id).and_return({
-                                                                             'plan' => 'pro',
-                                                                             'status' => 'active',
-                                                                             'features' => { 'features' => ['basic_signing'] }
-                                                                           })
+  it 'offers nothing to buy: no upgrade, cancel or checkout control, and no plan cards' do
+    stub_plan('pro')
 
-    get settings_subscriptions_path, params: { upgraded: 'pro' }
+    get settings_subscriptions_path
 
-    expect(response).to have_http_status(:ok)
-    expect(response.body).to include('Plan activated successfully.')
-    expect(response.body).to include('Current plan:', 'Pro')
+    expect(response.body).not_to match(/Upgrade|Cancel current plan|checkout|Pro \+ AI|Contact sales|Rs \d/i)
+    expect(response.body).not_to include('AI:')
+    expect(response.body).not_to include('<form action="/settings/subscriptions"')
   end
 
-  it 'redirects to the private checkout URL when premium checkout starts' do
-    expect(PremiumBridge).to receive(:create_checkout).with(hash_including(
-                                                              account_id: account.id,
-                                                              plan: 'pro',
-                                                              provider: 'razorpay',
-                                                              email: user.email,
-                                                              success_url: a_string_including('upgraded=pro'),
-                                                              cancel_url: a_string_ending_with('/settings/subscriptions')
-                                                            )).and_return({ 'checkout_url' => 'https://checkout.example.test/session' })
-
-    post settings_subscriptions_path, params: { plan: 'pro', provider: 'razorpay' }
-
-    expect(response).to redirect_to('https://checkout.example.test/session')
+  it 'has no route to start a checkout or cancel a plan' do
+    expect { post settings_subscriptions_path, params: { plan: 'pro' } }.to raise_error(ActionController::RoutingError)
+    expect { delete '/settings/subscriptions/pro' }.to raise_error(ActionController::RoutingError)
   end
 
-  it 'fails closed when premium checkout is unavailable' do
-    allow(PremiumBridge).to receive(:create_checkout).and_return({})
-
-    post settings_subscriptions_path, params: { plan: 'pro', provider: 'razorpay' }
-
-    expect(response).to redirect_to(settings_subscriptions_path)
-    expect(flash[:alert]).to eq('Unable to start upgrade. Check premium service connectivity.')
+  it 'no longer lists a Pro + AI plan' do
+    expect(SubscriptionPlans.all.keys).not_to include('pro_ai')
+    expect(SubscriptionPlans.all.values.flat_map(&:keys)).not_to include(:ai)
   end
 
-  it 'fails closed when premium cancellation is unavailable' do
-    allow(PremiumBridge).to receive(:cancel_subscription).with(account_id: account.id).and_return({})
+  it 'does not show an Upgrade button in the settings navbar' do
+    stub_plan('free')
 
-    delete settings_subscription_path(id: 'pro')
+    get settings_subscriptions_path
 
-    expect(response).to redirect_to(settings_subscriptions_path)
-    expect(flash[:alert]).to eq('Unable to cancel plan. Check premium service connectivity.')
-  end
-
-  it 'shows a confirmation when premium cancellation succeeds' do
-    allow(PremiumBridge).to receive(:cancel_subscription).with(account_id: account.id).and_return({ 'status' => 'cancelled' })
-
-    delete settings_subscription_path(id: 'pro')
-
-    expect(response).to redirect_to(settings_subscriptions_path)
-    expect(flash[:notice]).to eq('Plan cancelled.')
+    expect(response.body).not_to include('btn btn-warning btn-sm')
   end
 end

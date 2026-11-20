@@ -7,7 +7,6 @@ module SubscriptionPlans
       price_monthly: 0,
       docs: '10 / month',
       users: '1',
-      ai: false,
       api: false
     },
     'starter' => {
@@ -15,7 +14,6 @@ module SubscriptionPlans
       price_monthly: 499,
       docs: '100 / month',
       users: '3',
-      ai: false,
       api: true
     },
     'pro' => {
@@ -23,15 +21,6 @@ module SubscriptionPlans
       price_monthly: 1999,
       docs: 'Unlimited',
       users: '10',
-      ai: false,
-      api: true
-    },
-    'pro_ai' => {
-      title: 'Pro + AI',
-      price_monthly: 3499,
-      docs: 'Unlimited',
-      users: '10',
-      ai: true,
       api: true
     },
     'enterprise' => {
@@ -39,7 +28,6 @@ module SubscriptionPlans
       price_monthly: nil,
       docs: 'Unlimited',
       users: 'Unlimited',
-      ai: true,
       api: true
     }
   }.freeze
