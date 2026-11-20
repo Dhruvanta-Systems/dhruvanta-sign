@@ -13,11 +13,6 @@ Lint/NonAtomicFileOperation:
     - 'spec/services/outbound/oauth_token_client_spec.rb'
 
 # Offense count: 1
-Lint/NonLocalExitFromIterator:
-  Exclude:
-    - 'config/initializers/premium_hooks.rb'
-
-# Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: AllowedMethods.
 # AllowedMethods: present?, blank?, presence, presence_in, try, try!, in?
@@ -161,7 +156,6 @@ RSpec/VerifiedDoubles:
 Rails/Blank:
   Exclude:
     - 'app/controllers/submit_form_voice_signature_controller.rb'
-    - 'config/initializers/premium_hooks.rb'
     - 'lib/jwt_sso/jwks_client.rb'
 
 # Offense count: 9

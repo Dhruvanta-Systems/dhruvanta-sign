@@ -87,8 +87,8 @@ the fields with `WEBHOOK_OUTBOX_TENANT_FIELD` and `WEBHOOK_OUTBOX_USER_FIELD`.
 `PREMIUM_SERVICE_URL` (with `PREMIUM_API_TOKEN`) points the plan, subscription
 and video-KYC features at an external service. It is unset by default. When set,
 the app sends plan lookups and event notifications (including submitter email
-addresses and phone numbers for `form.completed`, `submission.completed` and
-`submitter.created`) to that service, so treat it as a deliberate transfer of
+addresses and phone numbers for `form.completed` and `submission.completed`, sent when a
+submitter finishes) to that service, so treat it as a deliberate transfer of
 personal data to a processor you control.
 
 ## Audit export is single-consumer

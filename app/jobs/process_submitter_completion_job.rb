@@ -47,6 +47,16 @@ class ProcessSubmitterCompletionJob
     end
 
     enqueue_completed_webhooks(submitter, is_last:)
+
+    notify_premium_service(submitter, is_last:)
+  end
+
+  def notify_premium_service(submitter, is_last:)
+    PremiumBridge.notify_form_completed(submitter)
+    PremiumBridge.notify_submission_completed(submitter.submission) if is_last
+  rescue StandardError => e
+    Rollbar.error(e) if defined?(Rollbar)
+    Rails.logger.warn("PremiumBridge notify failed: #{e.class}")
   end
 
   def create_completed_submitter!(submitter)

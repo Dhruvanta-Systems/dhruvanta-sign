@@ -35,6 +35,28 @@ module PremiumBridge
     end
   end
 
+  # Called by ProcessSubmitterCompletionJob once a submitter's result is generated.
+  # (These used to be ActiveSupport.on_load hooks that nothing ever triggered, so
+  # the service never heard about a completed signing.)
+  def notify_form_completed(submitter)
+    return unless enabled?
+
+    notify('form.completed', {
+             account_id: submitter.account_id,
+             submitter_id: submitter.id,
+             submission_id: submitter.submission_id,
+             email: submitter.email,
+             phone: submitter.phone,
+             document_hash: submitter.documents.first&.metadata&.dig('sha256')
+           })
+  end
+
+  def notify_submission_completed(submission)
+    return unless enabled?
+
+    notify('submission.completed', { account_id: submission.account_id, submission_id: submission.id })
+  end
+
   def create_video_kyc_session(payload)
     return {} unless enabled?
 
