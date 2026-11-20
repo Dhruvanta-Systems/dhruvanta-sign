@@ -118,7 +118,6 @@ describe 'Identity verification API' do
     premium_bridge_methods = %i[
       enabled?
       plan_for
-      create_checkout
       create_video_kyc_session
       video_kyc_status
     ]
