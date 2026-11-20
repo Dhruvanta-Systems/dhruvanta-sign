@@ -41,12 +41,19 @@ jobs:
         with:
           node-version: 22.22.2
       - name: Audit dependencies
-        # Fails on any high or critical advisory (the exit code only counts levels
-        # at or above --level). Fix a finding by upgrading or with a package.json
-        # resolution; there is no ignore list.
+        # Fails on any high or critical advisory. yarn's exit code is a bit mask
+        # (1 info, 2 low, 4 moderate, 8 high, 16 critical) and counts every level
+        # whatever --level says, so only the high and critical bits are tested.
+        # Fix a finding by upgrading or with a package.json resolution; there is
+        # no ignore list.
         run: |
           npm install -g yarn@1.22.22
-          yarn audit --level high
+          code=0
+          yarn audit --level high || code=$?
+          if [ $((code & 24)) -ne 0 ]; then
+            echo "high or critical advisories found (yarn audit exit code $code)"
+            exit 1
+          fi
 
   rubocop:
     name: Rubocop
