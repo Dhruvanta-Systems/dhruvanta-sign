@@ -18,7 +18,7 @@ describe 'Hosting defaults' do
     it 'seeds no user' do
       seeds = Rails.root.join('db/seeds.rb')
 
-      expect(!seeds.exist? || seeds.read.match?(/User\.|Account\./)).to be(false)
+      expect(seeds.exist? && seeds.read.match?(/User\.|Account\./)).to be_falsey
     end
   end
 
@@ -134,7 +134,7 @@ describe 'Hosting defaults' do
     end
 
     def status_for(host, path = '/')
-      Rack::MockRequest.new(app).get("http://#{host}#{path}").status
+      Rack::MockRequest.new(app).get(path, 'HTTP_HOST' => host).status
     end
 
     it 'serves the configured host, refuses another, and leaves the health check open' do
