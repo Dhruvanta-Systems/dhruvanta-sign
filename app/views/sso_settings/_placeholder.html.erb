@@ -1,15 +1,25 @@
-<div class="alert">
-  <%= svg_icon('info_circle', class: 'w-6 h-6') %>
-  <div>
-    <p class="font-bold">
-      <%= t('single_sign_on_with_saml_2_0') %>
-    </p>
-    <p class="text-gray-700">
-      <%= t('unlock_with_docuseal_pro') %>
-      <br>
-      <a class="link font-medium" target="_blank" href="<%= Docuseal.multitenant? ? console_redirect_index_path(redir: "#{Docuseal::CONSOLE_URL}/plans") : "#{Docuseal::CLOUD_URL}/sign_up?#{{ redir: "#{Docuseal::CONSOLE_URL}/on_premises" }.to_query}" %>" data-turbo="false">
-        <%= t('learn_more') %>
-      </a>
-    </p>
-  </div>
+<div class="my-4">
+  <h2 class="text-xl font-bold mb-2">SAML Single Sign-On</h2>
+  <% sso_config = EncryptedConfig.find_or_initialize_by(account: current_account, key: 'saml_configs') %>
+  <% if defined?(OneLogin::RubySaml) %>
+    <%= form_with url: settings_sso_index_path, method: :post, class: 'space-y-4' do %>
+      <div class="form-control">
+        <label class="label"><span class="label-text font-medium">IdP SSO URL</span></label>
+        <input type="url" name="encrypted_config[value][idp_sso_url]" value="<%= sso_config.value.is_a?(Hash) ? sso_config.value['idp_sso_url'] : '' %>" class="base-input" autocomplete="off" placeholder="https://idp.example.com/sso">
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">IdP Entity ID</span></label>
+        <input type="text" name="encrypted_config[value][idp_entity_id]" value="<%= sso_config.value.is_a?(Hash) ? sso_config.value['idp_entity_id'] : '' %>" class="base-input" autocomplete="off">
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">IdP Certificate (PEM)</span></label>
+        <textarea name="encrypted_config[value][idp_certificate]" class="base-input h-32" placeholder="-----BEGIN CERTIFICATE-----"><%= sso_config.value.is_a?(Hash) ? sso_config.value['idp_certificate'] : '' %></textarea>
+      </div>
+      <button type="submit" class="base-button">Save SSO Configuration</button>
+    <% end %>
+  <% else %>
+    <div class="alert">
+      <p>SAML SSO requires the <code>ruby-saml</code> gem. Add <code>gem 'ruby-saml'</code> to your Gemfile and run <code>bundle install</code>.</p>
+    </div>
+  <% end %>
 </div>

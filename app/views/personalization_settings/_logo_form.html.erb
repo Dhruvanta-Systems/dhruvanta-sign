@@ -1,1 +1,16 @@
-<%= render 'logo_placeholder' %>
+<div class="my-4">
+  <h2 class="text-xl font-bold mb-2"><%= t('company_logo') %></h2>
+  <% if current_account.logo.attached? %>
+    <div class="mb-4 flex items-center gap-4">
+      <%= image_tag url_for(current_account.logo), class: 'max-h-16 max-w-48 object-contain', alt: 'Company logo' %>
+      <%= button_to t('remove'), settings_personalization_path(remove_logo: true), method: :post, class: 'btn btn-outline btn-error btn-sm', data: { turbo_confirm: t('are_you_sure') } %>
+    </div>
+  <% end %>
+  <%= form_with url: settings_personalization_path, method: :post, multipart: true, class: 'space-y-2' do %>
+    <div class="form-control">
+      <input type="file" name="logo" accept="image/png,image/jpeg,image/svg+xml" class="file-input file-input-bordered w-full max-w-xs">
+      <label class="label"><span class="label-text-alt">PNG, JPG, or SVG. Max 2MB.</span></label>
+    </div>
+    <button type="submit" class="base-button"><%= t('upload') %></button>
+  <% end %>
+</div>

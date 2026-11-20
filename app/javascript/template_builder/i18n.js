@@ -225,6 +225,8 @@ const en = {
   save_and_preview: 'Save and Preview',
   preferences: 'Preferences',
   available_in_pro: 'Available in Pro',
+  voice_consent: 'Voice consent',
+  video_kyc: 'Video KYC',
   some_fields_are_missing_in_the_formula: 'Some fields are missing in the formula.',
   learn_more: 'Learn more',
   and: 'and',

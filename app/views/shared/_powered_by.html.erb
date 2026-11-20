@@ -1,13 +1,17 @@
-<div class="text-center px-2">
+<div class="text-center px-2 mt-2 mb-1">
   <% if local_assigns[:with_counter] %>
     <% count = CompletedSubmitter.distinct.count(:submission_id) %>
     <% if count > 1 %>
       <%= t('count_documents_signed_with_html', count:) %>
     <% else %>
-      <%= t('powered_by') %>
+      Powered by
     <% end %>
   <% else %>
-    <%= t('powered_by') %>
+    Powered by
   <% end %>
-  <a href="<%= Docuseal::PRODUCT_URL %><%= local_assigns[:link_path] %>" class="underline"><%= Docuseal.product_name %></a> - <%= t('open_source_documents_software') %>
+  <a href="https://www.docuseal.com<%= local_assigns[:link_path] %>" target="_blank" rel="noopener" class="underline font-medium">DocuSeal</a>
+  <span class="text-base-content/50">—</span>
+  <span class="text-sm text-base-content/60"><%= t('open_source_documents_software') %></span>
+  <span class="text-base-content/50">·</span>
+  <a href="<%= Docuseal::SOURCE_CODE_URL %>" target="_blank" rel="noopener" class="underline text-sm" data-source-code-link>Source code</a>
 </div>

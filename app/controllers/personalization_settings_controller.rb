@@ -13,13 +13,41 @@ class PersonalizationSettingsController < ApplicationController
 
   InvalidKey = Class.new(StandardError)
 
-  before_action :load_and_authorize_account_config, only: :create
+  before_action :load_and_authorize_account_config, only: :create, unless: :logo_request?
 
   def show
     authorize!(:read, AccountConfig)
+
+    return unless request.format.to_sym == :turbo_stream
+
+    redirect_to settings_personalization_path(format: :html), status: :see_other
   end
 
   def create
+    if params[:logo].present?
+      authorize!(:update, current_account)
+
+      if params[:logo].size > 2.megabytes
+        return redirect_back(fallback_location: settings_personalization_path,
+                             alert: 'File is too large. Maximum size is 2MB.', status: :see_other)
+      end
+      unless params[:logo].content_type.in?(%w[image/png image/jpeg image/svg+xml])
+        return redirect_back(fallback_location: settings_personalization_path,
+                             alert: 'Invalid file type. Only PNG, JPG, and SVG are supported.', status: :see_other)
+      end
+      current_account.logo.attach(params[:logo])
+      return redirect_back(fallback_location: settings_personalization_path,
+                           notice: I18n.t('settings_have_been_saved'), status: :see_other)
+    end
+
+    if params[:remove_logo] == 'true'
+      authorize!(:update, current_account)
+
+      current_account.logo.purge
+      return redirect_back(fallback_location: settings_personalization_path,
+                           notice: I18n.t('settings_have_been_saved'), status: :see_other)
+    end
+
     if @account_config.value.is_a?(Hash)
       @account_config.value = @account_config.value.reject do |_, v|
         v.blank? && v != false
@@ -32,7 +60,8 @@ class PersonalizationSettingsController < ApplicationController
       @account_config.save!
     end
 
-    redirect_back(fallback_location: settings_personalization_path, notice: I18n.t('settings_have_been_saved'))
+    redirect_back(fallback_location: settings_personalization_path,
+                  notice: I18n.t('settings_have_been_saved'), status: :see_other)
   end
 
   private
@@ -64,5 +93,9 @@ class PersonalizationSettingsController < ApplicationController
     end
 
     attrs
+  end
+
+  def logo_request?
+    params[:logo].present? || params[:remove_logo] == 'true'
   end
 end

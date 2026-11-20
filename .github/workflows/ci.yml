@@ -1,8 +1,35 @@
 ---
 name: CI
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# No job uses secrets, nothing is published from CI, and no trigger runs
+# with elevated privileges on untrusted code.
+permissions:
+  contents: read
 
 jobs:
+  bundle_audit:
+    name: Bundle audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 4.0.10
+      - name: Audit dependencies
+        # Standalone install (not in the Gemfile) so the audit needs no lockfile
+        # change. There is no ignore list: fix a finding by upgrading.
+        run: |
+          gem install bundler-audit -v 0.9.3
+          bundle-audit check --update
+
   rubocop:
     name: Rubocop
     runs-on: ubuntu-latest
@@ -60,12 +87,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0
+          # The eID Easy widget requires Node 22 exactly (same pin as the Dockerfile).
+          node-version: 22.22.2
       - name: Cache directory path
         id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
+        run: echo "dir=$(yarn cache dir)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         id: yarn-cache
         with:
@@ -90,6 +118,10 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: 4.0.10
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
       - name: Cache gems
         uses: actions/cache@v4
         with:
@@ -104,7 +136,7 @@ jobs:
           bundle install --jobs 4 --retry 4
           yarn install
           sudo apt-get update
-          sudo apt-get install libvips libleptonica6
+          sudo apt-get install -y libvips libleptonica-dev
       - name: Run Brakeman
         run: bundle exec brakeman -q --exit-on-warn
 
@@ -130,7 +162,15 @@ jobs:
 
     steps:
       - name: Install packages
-        run: apk add --no-cache build-base git libpq-dev yaml-dev nodejs yarn tar zstd gzip wget unzip vips leptonica chromium
+        # The eID Easy widget requires Node 22 exactly and the image defaults to
+        # Node 24, so take Node 22 from the Alpine 3.22 repositories (same approach
+        # as the Dockerfile). Chromium comes from the same repositories in the same
+        # command: the current chromium needs a newer ICU than Node 22 can use.
+        # yarn comes from npm: the apk yarn package would pull Node 24.
+        run: |
+          apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository=https://dl-cdn.alpinelinux.org/alpine/v3.22/community "nodejs<23" npm chromium
+          npm install -g yarn@1.22.22
+          apk add --no-cache build-base git libpq-dev yaml-dev tar zstd gzip wget unzip vips leptonica
       - uses: actions/checkout@v4
       - name: Cache node_modules
         uses: actions/cache@v4

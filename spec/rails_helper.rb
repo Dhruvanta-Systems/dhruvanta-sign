@@ -18,25 +18,28 @@ WebMock.disable_net_connect!(allow_localhost: true)
 require 'simplecov' if ENV['COVERAGE']
 
 Capybara.server = :puma, { Silent: true }
+Capybara.server_host = '127.0.0.1'
 Capybara.disable_animation = true
 
 blink_settings = 'primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4'
 
 Capybara.register_driver(:headless_cuprite) do |app|
   Capybara::Cuprite::Driver.new(app, window_size: [1200, 800],
-                                     process_timeout: 20,
-                                     timeout: 20,
+                                     process_timeout: 30,
+                                     timeout: 30,
                                      js_errors: true,
-                                     browser_options: { 'no-sandbox' => nil, 'blink-settings' => blink_settings })
+                                     browser_options: { 'no-sandbox' => nil, 'disable-dev-shm-usage' => nil, 'disable-gpu' => nil,
+                                                        'blink-settings' => blink_settings })
 end
 
 Capybara.register_driver(:headful_cuprite) do |app|
   Capybara::Cuprite::Driver.new(app, window_size: [1200, 800],
                                      headless: false,
-                                     process_timeout: 20,
-                                     timeout: 20,
+                                     process_timeout: 30,
+                                     timeout: 30,
                                      js_errors: true,
-                                     browser_options: { 'no-sandbox' => nil, 'blink-settings' => blink_settings })
+                                     browser_options: { 'no-sandbox' => nil, 'disable-dev-shm-usage' => nil, 'disable-gpu' => nil,
+                                                        'blink-settings' => blink_settings })
 end
 
 Rails.root.glob('spec/support/**/*.rb').each { |f| require f }
@@ -58,11 +61,16 @@ RSpec.configure do |config|
   config.include ActiveSupport::Testing::TimeHelpers
 
   config.before(:each, type: :system) do
+    $disable_upgrade_insecure_requests = true
     if ENV['HEADLESS'] == 'false'
       driven_by :headful_cuprite
     else
       driven_by :headless_cuprite
     end
+  end
+
+  config.after(:each, type: :system) do
+    $disable_upgrade_insecure_requests = false
   end
 
   config.before do

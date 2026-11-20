@@ -26,6 +26,7 @@ class UserConfig < ApplicationRecord
   RECEIVE_COMPLETED_EMAIL = 'receive_completed_email'
   RECEIVE_DECLINED_EMAIL = 'receive_declined_email'
   SHOW_APP_TOUR = 'show_app_tour'
+  EXTERNAL_USER_ID_KEY = 'external_user_id'
 
   belongs_to :user
 

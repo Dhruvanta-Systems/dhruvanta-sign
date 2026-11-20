@@ -3,9 +3,23 @@
 require 'puma/plugin'
 require 'redis_client'
 
+# Embedded Sidekiq plugin for Puma.
+#
+# Activation gate: this plugin runs an in-process Sidekiq alongside Puma only
+# when `LOCAL_REDIS_URL` is set, which `config/dotenv.rb` does if `REDIS_URL`
+# is empty, i.e. no external Redis is configured and the sibling `redis_server`
+# plugin is forking a co-located `redis-server`. When an external Redis is
+# configured, a dedicated `sidekiq` worker is expected to run against it, so
+# the embedded worker would be a duplicate on the same queues. This mirrors the
+# `LOCAL_REDIS_URL` gate in `lib/puma/plugin/redis_server.rb` so both embed
+# plugins disable symmetrically.
 # rubocop:disable-next Metrics
 Puma::Plugin.create do
   def config(cfg)
+    # Gate mirrors redis_server.rb. When an external Redis is configured
+    # (LOCAL_REDIS_URL empty), defer entirely to the dedicated sidekiq worker
+    # container; do not embed.
+    return if ENV['LOCAL_REDIS_URL'].to_s.empty?
     return if cfg.instance_variable_get(:@options)[:workers] <= 0
 
     cfg.on_worker_boot { start_sidekiq! }
@@ -15,6 +29,9 @@ Puma::Plugin.create do
   end
 
   def start(launcher)
+    # Same gate as in `config` above.
+    return if ENV['LOCAL_REDIS_URL'].to_s.empty?
+
     launcher.events.after_booted do
       next if Puma.stats_hash[:workers].to_i != 0
 

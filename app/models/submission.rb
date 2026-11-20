@@ -50,6 +50,7 @@ class Submission < ApplicationRecord
 
   has_many :submitters, dependent: :destroy
   has_many :submission_events, dependent: :destroy
+  has_many :approval_steps, dependent: :destroy
 
   attribute :preferences, :string, default: -> { {} }
 
@@ -121,6 +122,15 @@ class Submission < ApplicationRecord
     preserved: 'preserved'
   }, scope: false, prefix: true
 
+  # Emit the `submission_created` outbox event exactly once per submission,
+  # whichever controller, service or job created it. The dispatcher's UNIQUE
+  # `delivery_id` (keyed on `submission:<id>:created`) keeps it idempotent.
+  #
+  # `after_commit on: :create` (not `after_create`) is required: the drain worker
+  # reads the row from another process, so the row must be visible when the
+  # post-commit hook fires.
+  after_commit :emit_submission_created_webhook, on: :create
+
   def expired?
     expire_at && expire_at <= Time.current
   end
@@ -186,5 +196,16 @@ class Submission < ApplicationRecord
     return if combined_document.blank?
 
     ActiveStorage::Blob.proxy_url(combined_document.blob, expires_at:)
+  end
+
+  private
+
+  # Wraps `Outbound::SubmissionWebhookEmitter.emit` so the callback stays a
+  # one-liner. The `defined?` guard covers early-boot contexts (rake tasks)
+  # where the `Outbound::` namespace is not yet autoloaded.
+  def emit_submission_created_webhook
+    return unless defined?(Outbound::SubmissionWebhookEmitter)
+
+    Outbound::SubmissionWebhookEmitter.emit(self)
   end
 end

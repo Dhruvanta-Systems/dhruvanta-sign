@@ -70,6 +70,11 @@
           </li>
         <% end %>
         <%= render 'shared/settings_nav_extra', nav_link_data: %>
+        <% if can?(:read, :analytics) %>
+          <li>
+            <%= link_to 'Analytics', analytics_path, class: 'text-base hover:bg-base-300', data: nav_link_data %>
+          </li>
+        <% end %>
         <% if Docuseal.demo? || !Docuseal.multitenant? %>
           <% if can?(:read, AccessToken) %>
             <li>
@@ -86,7 +91,7 @@
         <% end %>
         <% if !Docuseal.demo? && !turbo_native_app? && can?(:manage, EncryptedConfig) && (current_user != true_user || !current_account.linked_account_account) %>
           <li>
-            <%= content_for(:pro_link) || link_to(Docuseal.multitenant? ? console_redirect_index_path(redir: "#{Docuseal::CONSOLE_URL}/plans") : "#{Docuseal::CLOUD_URL}/sign_up?#{{ redir: "#{Docuseal::CONSOLE_URL}/on_premises" }.to_query}", class: 'text-base hover:bg-base-300', data: { turbo: false }) do %>
+            <%= content_for(:pro_link) || link_to(settings_subscriptions_path, class: 'text-base hover:bg-base-300', data: { turbo: false }) do %>
               <%= t('plans') %>
               <span class="badge badge-warning"><%= t('pro') %></span>
             <% end %>
@@ -95,14 +100,14 @@
         <% if !Docuseal.demo? && can?(:manage, EncryptedConfig) && (current_user == true_user || current_account.testing?) %>
           <% unless turbo_native_app? %>
             <li>
-              <%= link_to Docuseal.multitenant? ? console_redirect_index_path(redir: "#{Docuseal::CONSOLE_URL}#{'/test' if current_account.testing?}/api") : "#{Docuseal::CONSOLE_URL}/on_premises", class: 'text-base hover:bg-base-300', data: { turbo: false } do %>
+              <%= link_to settings_subscriptions_path, class: 'text-base hover:bg-base-300', data: { turbo: false } do %>
                 <% if Docuseal.multitenant? %> API <% else %> <%= t('console') %> <% end %>
               <% end %>
             </li>
           <% end %>
           <% if Docuseal.multitenant? && !turbo_native_app? %>
             <li>
-              <%= link_to console_redirect_index_path(redir: "#{Docuseal::CONSOLE_URL}#{'/test' if current_account.testing?}/embedding/form"), class: 'text-base hover:bg-base-300', data: { turbo: false } do %>
+              <%= link_to settings_subscriptions_path, class: 'text-base hover:bg-base-300', data: { turbo: false } do %>
                 <%= t('embedding') %>
               <% end %>
             </li>

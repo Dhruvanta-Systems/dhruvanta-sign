@@ -1,0 +1,25 @@
+<div class="max-w-5xl mx-auto py-8">
+  <h1 class="text-3xl font-bold mb-6">Document Intelligence</h1>
+  <div class="stats shadow w-full mb-6">
+    <div class="stat"><div class="stat-title">Sent</div><div class="stat-value"><%= @total_sent %></div></div>
+    <div class="stat"><div class="stat-title">Opened</div><div class="stat-value"><%= @total_opened %></div></div>
+    <div class="stat"><div class="stat-title">Completed</div><div class="stat-value text-success"><%= @total_completed %></div></div>
+    <div class="stat"><div class="stat-title">Declined</div><div class="stat-value text-error"><%= @total_declined %></div></div>
+    <div class="stat"><div class="stat-title">Completion Rate</div><div class="stat-value"><%= @completion_rate %>%%</div></div>
+    <div class="stat"><div class="stat-title">Avg Time to Sign</div><div class="stat-value text-sm"><%= @avg_time_to_sign.round(1) %> hrs</div></div>
+  </div>
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="card bg-base-100 shadow"><div class="card-body">
+      <h2 class="card-title">Daily Completions</h2>
+      <bar-chart data-values="<%= @daily_completions.map(&:last).to_json %>" data-labels="<%= @daily_completions.map { |d| d.first.strftime('%b %d') }.to_json %>"></bar-chart>
+    </div></div>
+    <div class="card bg-base-100 shadow"><div class="card-body">
+      <h2 class="card-title">Top Templates</h2>
+      <table class="table table-sm"><tbody>
+        <% @top_templates.each do |name, count| %>
+          <tr><td><%= name %></td><td class="text-right font-bold"><%= count %></td></tr>
+        <% end %>
+      </tbody></table>
+    </div></div>
+  </div>
+</div>

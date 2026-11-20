@@ -5,6 +5,11 @@ class SubmitFormController < ApplicationController
 
   around_action :with_browser_locale, only: %i[show completed success delegated]
   skip_before_action :authenticate_user!
+  # Invalid `/s/<slug>` URLs must 404 rather than redirect to the `/setup`
+  # wizard when no admin user exists. `maybe_redirect_delegated` raises
+  # `RecordNotFound` for slugs that are neither a `Submitter` nor a
+  # `SubmitterVersion`, which `ErrorsController` renders as the 404 page.
+  skip_before_action :maybe_redirect_to_setup
   skip_authorization_check
 
   before_action :load_submitter, only: %i[show update completed]

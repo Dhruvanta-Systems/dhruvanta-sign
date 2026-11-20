@@ -32,6 +32,28 @@ DocuSeal is an open source platform that provides secure and efficient digital d
 
 [![Demo](https://github.com/user-attachments/assets/8344a341-96cf-4df3-aaae-5458a21a65b3)](https://demo.docuseal.tech)
 
+> **This is a modified fork of [DocuSeal](https://github.com/docusealco/docuseal), not the original.**
+> It is maintained by Dhruvanta Sign maintainers under the name *Dhruvanta Sign*, and is licensed under
+> AGPL-3.0 with upstream's Section 7(b) additional terms (original DocuSeal attribution must stay visible in
+> the user interface). It is not affiliated with or endorsed by DocuSeal LLC. The complete source of this
+> version is this repository (also linked as "Source code" in the application footer and signer pages;
+> override the link with the `SOURCE_CODE_URL` environment variable).
+
+## What differs from upstream DocuSeal
+
+Based on upstream `master` at commit `a628dd30`. Added or changed here:
+
+| Area | Change |
+| --- | --- |
+| Branding | Product shown as "Dhruvanta Sign"; DocuSeal attribution and a source-code link kept on signer pages and the admin footer |
+| Approvals and access | Approval chains |
+| Sending | Bulk send; submitter reminders; document expiry warnings; embed form |
+| Signing | Voice consent, video KYC, geolocation capture, identity verification |
+| Plans | Subscriptions, analytics, SMS/WhatsApp settings, all user roles enabled; optional external plan service |
+| Integrations (all off until configured, see [docs/integrations.md](docs/integrations.md)) | Generic JWT single sign-on; HTTP mail API with OAuth2 client credentials; outbound webhook outbox; service-JWT audit-events export |
+| Security | Default Content-Security-Policy; signer URLs return 404 instead of redirecting to setup |
+| Not included | No offline service worker; no payment provider is bundled (the payment field behaves as in upstream) |
+
 ## Features
 - PDF form fields builder (WYSIWYG)
 - 12 field types available (Signature, Date, File, Checkbox etc.)
@@ -98,8 +120,15 @@ At DocuSeal we have expertise and technologies to make documents creation, filli
 
 ## License
 
-Distributed under the AGPLv3 License with Section 7(b) Additional Terms. See [LICENSE](https://github.com/docusealco/docuseal/blob/master/LICENSE) and [LICENSE_ADDITIONAL_TERMS](https://github.com/docusealco/docuseal/blob/master/LICENSE_ADDITIONAL_TERMS) for more information.
-Unless otherwise noted, all files © 2023-2026 DocuSeal LLC.
+Distributed under the AGPLv3 License with Section 7(b) Additional Terms. See [LICENSE](LICENSE) and [LICENSE_ADDITIONAL_TERMS](LICENSE_ADDITIONAL_TERMS) for more information.
+Unless otherwise noted, files originating from upstream are © 2023-2026 DocuSeal LLC; modifications in this fork are released under the same license.
+
+### Trademarks
+
+The names "Dhruvanta Sign" and "Dhruvanta" and the Dhruvanta logo are trademarks of their owners and are
+not licensed under the AGPL. The AGPL grants rights to the source code only. Do not use these names or
+the logo for a modified version in a way that suggests it is the original. DocuSeal's own names and marks
+belong to DocuSeal LLC.
 
 ## Tools
 

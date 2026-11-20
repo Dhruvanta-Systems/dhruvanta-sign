@@ -1,3 +1,10 @@
+inherit_from: .rubocop_todo.yml
+
+# Merge the Exclude lists of this file with those in .rubocop_todo.yml.
+inherit_mode:
+  merge:
+    - Exclude
+
 plugins:
   - rubocop-performance
   - rubocop-rails

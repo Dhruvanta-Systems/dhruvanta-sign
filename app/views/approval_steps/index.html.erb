@@ -1,0 +1,20 @@
+<div class="max-w-2xl mx-auto py-4">
+  <h2 class="text-xl font-bold mb-4">Approval Steps</h2>
+  <% @approval_steps.each do |step| %>
+    <div class="card bg-base-100 shadow mb-2"><div class="card-body py-3">
+      <div class="flex justify-between items-center">
+        <div>
+          <span class="font-medium"><%= step.approver.full_name.presence || step.approver.email %></span>
+          <span class="badge badge-sm ml-2 <%= step.status == 'approved' ? 'badge-success' : step.status == 'rejected' ? 'badge-error' : 'badge-warning' %>"><%= step.status %></span>
+        </div>
+        <% if step.status == 'pending' && step.approver_id == current_user.id %>
+          <div class="flex gap-1">
+            <%= button_to 'Approve', submission_approval_step_path(@submission, step, decision: 'approve'), method: :patch, class: 'btn btn-success btn-xs' %>
+            <%= button_to 'Reject', submission_approval_step_path(@submission, step, decision: 'reject'), method: :patch, class: 'btn btn-error btn-xs' %>
+          </div>
+        <% end %>
+      </div>
+      <% if step.comment.present? %><p class="text-sm text-gray-600 mt-1"><%= step.comment %></p><% end %>
+    </div></div>
+  <% end %>
+</div>

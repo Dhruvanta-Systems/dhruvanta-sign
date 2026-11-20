@@ -199,6 +199,34 @@ class SubmitterMailer < ApplicationMailer
     end
   end
 
+  def expiry_warning_email(submission, user)
+    @current_account = submission.account
+    @submission = submission
+    @user = user
+    @template_name = submission.template&.name || submission.name || 'Document'
+    @days_left = ((submission.expire_at - Time.current) / 1.day).ceil
+
+    # Routing variables for the HTTP mail API delivery method.
+    set_mail_api_template_variables(
+      account_id: @current_account.id,
+      user_id: user.id,
+      variables: {
+        'product_name' => Docuseal.product_name,
+        'template_name' => @template_name.to_s,
+        'days_left' => @days_left,
+        'expire_at' => submission.expire_at&.utc&.iso8601,
+        'submission_id' => submission.id
+      }
+    )
+
+    I18n.with_locale(@current_account.locale) do
+      mail(
+        to: user.friendly_name,
+        subject: "Expiring soon: #{@template_name} (#{@days_left} days left)"
+      )
+    end
+  end
+
   private
 
   def build_submitter_reply_to(submitter, email_config: nil, documents_copy_email: nil)

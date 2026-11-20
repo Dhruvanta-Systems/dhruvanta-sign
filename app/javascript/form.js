@@ -9,6 +9,8 @@ import FetchForm from './elements/fetch_form'
 import ScrollButtons from './elements/scroll_buttons'
 import PageContainer from './elements/page_container'
 import SubmitForm from './elements/submit_form'
+
+import SetGeolocation from './elements/set_geolocation'
 import ModalButton from './elements/modal_button'
 import NativeAction from './elements/native_action'
 
@@ -20,6 +22,7 @@ safeRegisterElement('fetch-form', FetchForm)
 safeRegisterElement('scroll-buttons', ScrollButtons)
 safeRegisterElement('page-container', PageContainer)
 safeRegisterElement('submit-form', SubmitForm)
+safeRegisterElement('set-geolocation', SetGeolocation)
 safeRegisterElement('modal-button', ModalButton)
 safeRegisterElement('native-action', NativeAction)
 safeRegisterElement('submission-form', class extends HTMLElement {
@@ -38,6 +41,7 @@ safeRegisterElement('submission-form', class extends HTMLElement {
       goToLast: this.dataset.goToLast === 'true',
       isDemo: this.dataset.isDemo === 'true',
       attribution: this.dataset.attribution !== 'false',
+      sourceCodeUrl: this.dataset.sourceCodeUrl || '',
       scrollPadding: this.dataset.scrollPadding || '-80px',
       signatureText: this.dataset.signatureText,
       language: this.dataset.language,

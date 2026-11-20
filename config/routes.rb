@@ -23,8 +23,23 @@ Rails.application.routes.draw do
     end
   end
 
+  # Generic JWT single sign-on receiver (disabled until configured, see JwtSso::Config).
+  get  '/sso/handoff' => 'jwt_sso_handoff#show', as: :jwt_sso_handoff
+  post '/api/auth/sso-handoff' => 'jwt_sso_handoff#create', as: :api_jwt_sso_handoff
+
+  # Audit-events export for service-to-service consumers. Auth is a service JWT,
+  # not a Devise session. See Api::Admin::AuditEventsController.
+  namespace :api, defaults: { format: :json } do
+    namespace :admin do
+      resources :audit_events, only: %i[index]
+    end
+  end
+
   namespace :api, defaults: { format: :json } do
     resource :user, only: %i[show]
+    put 'identity_verification/:field_uuid', to: 'identity_verification#start'
+    post 'identity_verification', to: 'identity_verification#complete'
+    post 'identity_verification/callbacks/:provider', to: 'identity_verification#callback'
     resources :submitter_form_views, only: %i[create]
     resources :submitters, only: %i[index show update]
     resources :submissions, only: %i[index show create update destroy] do
@@ -56,6 +71,7 @@ Rails.application.routes.draw do
   resources :encrypted_user_configs, only: %i[destroy]
   resources :timestamp_server, only: %i[create] unless Docuseal.multitenant?
   resources :dashboard, only: %i[index]
+  resources :analytics, only: %i[index]
   resources :search, only: %i[index]
   resources :setup, only: %i[index create]
   resource :newsletter, only: %i[show update]
@@ -67,6 +83,7 @@ Rails.application.routes.draw do
   resources :submissions_archived, only: %i[index], path: 'submissions/archived'
   resources :submissions, only: %i[index], controller: 'submissions_dashboard'
   resources :submissions, only: %i[show destroy] do
+    resources :approval_steps, only: %i[index create update]
     resources :unarchive, only: %i[create], controller: 'submissions_unarchive'
     resources :events, only: %i[index], controller: 'submission_events'
     resources :download, only: %i[index], controller: 'submissions_download'
@@ -96,6 +113,7 @@ Rails.application.routes.draw do
   resources :templates, only: %i[index], controller: 'templates_dashboard'
   resources :submissions_filters, only: %i[show], param: 'name'
   resources :templates, only: %i[new create edit update show destroy] do
+    resources :bulk_send, only: %i[new create], controller: 'submissions_bulk_send'
     resources :clone, only: %i[new create], controller: 'templates_clone'
     resource :debug, only: %i[show], controller: 'templates_debug' if Rails.env.development?
     resources :documents, only: %i[index create], controller: 'template_documents'
@@ -129,6 +147,9 @@ Rails.application.routes.draw do
     get '/disk/:encoded_key/*filename' => 'active_storage/disk#show', as: :rails_disk_service
   end
 
+  scope '/embed' do
+    get '/form/:slug', to: 'embed_form#show', as: :embed_form
+  end
   ActiveSupport.run_load_hooks(:multitenant_routes, self) if Docuseal.multitenant?
 
   resources :start_form, only: %i[show update], path: 'd', param: 'slug' do
@@ -151,6 +172,8 @@ Rails.application.routes.draw do
     resources :decline, only: %i[create], controller: 'submit_form_decline'
     resources :delegate, only: %i[create], controller: 'submit_form_delegate'
     resources :invite, only: %i[create], controller: 'submit_form_invite'
+    resources :voice_signature, only: %i[create], controller: 'submit_form_voice_signature'
+    resource :video_kyc, only: %i[show create], controller: 'submit_form_video_kyc'
     resources :metadata, only: %i[index], controller: 'submit_form_metadata'
     resource :click_email, only: %i[create], controller: 'submit_form_click_email'
     resources :view, only: %i[create], controller: 'submit_form_view'
@@ -185,7 +208,7 @@ Rails.application.routes.draw do
     unless Docuseal.multitenant?
       resources :storage, only: %i[index create], controller: 'storage_settings'
       resources :search_entries_reindex, only: %i[create]
-      resources :sms, only: %i[index], controller: 'sms_settings'
+      resources :sms, only: %i[index create], controller: 'sms_settings'
       resources :mcp, only: %i[index new create destroy], controller: 'mcp_settings'
     end
     if Docuseal.demo? || !Docuseal.multitenant?
@@ -193,7 +216,7 @@ Rails.application.routes.draw do
       resource :reveal_access_token, only: %i[show create], controller: 'reveal_access_token'
     end
     resources :email, only: %i[index create destroy], controller: 'email_smtp_settings'
-    resources :sso, only: %i[index], controller: 'sso_settings'
+    resources :sso, only: %i[index create], controller: 'sso_settings'
     resources :notifications, only: %i[index create], controller: 'notifications_settings'
     resource :esign, only: %i[show create new update destroy], controller: 'esign_settings'
     resources :users, only: %i[index]
@@ -211,6 +234,7 @@ Rails.application.routes.draw do
       end
     end
     resource :account, only: %i[show update destroy]
+    resources :subscriptions, only: %i[index create destroy]
     resources :profile, only: %i[index] do
       collection do
         patch :update_contact

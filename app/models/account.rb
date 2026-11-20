@@ -21,6 +21,7 @@
 class Account < ApplicationRecord
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
 
+  has_many :subscriptions, dependent: :destroy
   has_many :users, dependent: :destroy
   has_many :encrypted_configs, dependent: :destroy
   has_many :account_configs, dependent: :destroy
@@ -53,6 +54,9 @@ class Account < ApplicationRecord
   has_many :testing_accounts, through: :account_testing_accounts, source: :linked_account
   has_many :active_users, -> { active }, dependent: :destroy,
                                          inverse_of: :account, class_name: 'User'
+  has_one :subscription, dependent: :destroy
+
+  has_one_attached :logo
 
   attribute :timezone, :string, default: 'UTC'
   attribute :locale, :string, default: 'en-US'
@@ -70,5 +74,13 @@ class Account < ApplicationRecord
   def default_template_folder
     super || build_default_template_folder(name: TemplateFolder::DEFAULT_NAME,
                                            author_id: users.minimum(:id)).tap(&:save!)
+  end
+
+  def current_plan
+    subscription&.plan || 'free'
+  end
+
+  def plan_config
+    SubscriptionPlans.find(current_plan)
   end
 end

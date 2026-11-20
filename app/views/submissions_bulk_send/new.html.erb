@@ -1,0 +1,17 @@
+<div class="max-w-xl mx-auto py-8">
+  <h1 class="text-2xl font-bold mb-4">Bulk Send: <%= @template.name %></h1>
+  <p class="text-sm text-gray-600 mb-6">Upload a CSV or XLSX file with columns: email (required), name, phone</p>
+  <%= form_with url: template_bulk_send_index_path(@template), method: :post, multipart: true, class: 'space-y-4' do %>
+    <div class="form-control">
+      <input type="file" name="file" accept=".csv,.xlsx" class="file-input file-input-bordered w-full" required>
+      <label class="label"><span class="label-text-alt">Max 5MB, 1000 rows</span></label>
+    </div>
+    <div class="form-control">
+      <label class="label cursor-pointer justify-start gap-3">
+        <input type="checkbox" name="send_email" value="true" class="checkbox" checked>
+        <span class="label-text">Send invitation emails</span>
+      </label>
+    </div>
+    <button type="submit" class="base-button">Upload & Send</button>
+  <% end %>
+</div>

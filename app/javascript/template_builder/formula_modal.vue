@@ -7,7 +7,10 @@
       class="absolute top-0 bottom-0 right-0 left-0"
       @click.prevent="$emit('close')"
     />
-    <div :class="inline ? (nativePlatform === 'android' ? 'pt-1.5 pb-6' : 'pt-3 pb-6') : 'modal-box pt-4 pb-6 px-6 mt-20 max-h-none w-full max-w-xl'" :style="inline ? { paddingInline: '18px' } : null">
+    <div
+      :class="inline ? (nativePlatform === 'android' ? 'pt-1.5 pb-6' : 'pt-3 pb-6') : 'modal-box pt-4 pb-6 px-6 mt-20 max-h-none w-full max-w-xl'"
+      :style="inline ? { paddingInline: '18px' } : null"
+    >
       <div
         v-if="!inline"
         class="flex justify-between items-center border-b pb-2 mb-2 font-medium"
@@ -27,7 +30,7 @@
           class="bg-base-300 rounded-xl py-2 px-3 text-center"
         >
           <a
-            href="https://www.docuseal.com/pricing"
+            href="/settings/subscriptions"
             target="_blank"
             class="link"
           >{{ t('available_in_pro') }}</a>

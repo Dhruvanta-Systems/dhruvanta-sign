@@ -48,7 +48,7 @@ module Submissions
             uuid = find_submitter_uuid(template_submitters, submitter_attrs, index)
 
             next if uuid.blank?
-            next if submitter_attrs.slice('email', 'phone', 'name').compact_blank.blank?
+            next if submitter_attrs.slice('email', 'phone', 'name', :email, :phone, :name).compact_blank.blank?
 
             submission.template_fields = submission.template.fields if submitter_attrs[:completed].present? &&
                                                                        submission.template_fields.blank?

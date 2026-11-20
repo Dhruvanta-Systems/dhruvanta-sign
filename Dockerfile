@@ -24,7 +24,13 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache nodejs yarn git build-base && \
+# The eID Easy widget requires Node 22 exactly; the ruby alpine image
+# defaults to Node 24, which breaks production asset builds.
+# Alpine 3.22 only carries the current 22.x patch release, so match "<23" rather
+# than an exact revision. yarn is installed with npm because the apk yarn package
+# depends on whatever nodejs the base image offers (24).
+RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.22/main "nodejs<23" npm git build-base && \
+    npm install -g yarn@1.22.22 && \
     gem install shakapacker
 
 COPY ./package.json ./yarn.lock ./

@@ -22,6 +22,8 @@ class ApplicationController < ActionController::Base
                 :true_ability,
                 :form_link_host,
                 :svg_icon,
+                :current_plan_data,
+                :premium_feature?,
                 :browser_os,
                 :turbo_native_ios?,
                 :turbo_native_android?
@@ -47,6 +49,8 @@ class ApplicationController < ActionController::Base
   end
 
   def default_url_options
+    return {} if Rails.env.test?
+
     Docuseal.default_url_options
   end
 
@@ -164,19 +168,52 @@ class ApplicationController < ActionController::Base
   end
 
   def set_csp
+    # Per-request narrowing on top of the baseline policy registered in
+    # `config/initializers/content_security_policy.rb`, which is what emits the
+    # live header. Keep the directives here aligned with that initializer.
     request.content_security_policy = current_content_security_policy.tap do |policy|
       policy.default_src :self
-      policy.script_src :self
-      policy.style_src :self, :unsafe_inline
-      policy.img_src :self, :https, :http, :blob, :data
-      policy.font_src :self, :https, :http, :blob, :data
+      policy.script_src  :self, :unsafe_inline
+      policy.style_src   :self, :unsafe_inline
+      policy.img_src     :self, :data, :blob
+      policy.font_src    :self, :data
       policy.manifest_src :self
-      policy.media_src :self
-      policy.frame_src :self
-      policy.worker_src :self, :blob
-      policy.connect_src :self
+      policy.media_src   :self
+      policy.frame_src   :self
+      policy.frame_ancestors :self
+      policy.form_action :self
+      policy.base_uri    :self
+      policy.object_src  :none
+      policy.worker_src  :self, :blob
+      policy.connect_src :self, 'wss:'
+      policy.upgrade_insecure_requests true
+      policy.directives.delete('upgrade-insecure-requests') if $disable_upgrade_insecure_requests
 
       policy.directives['connect-src'] << 'ws:' if Rails.env.development?
     end
+  end
+
+  def current_plan_data
+    @current_plan_data ||= PremiumBridge.plan_for(current_account&.id)
+  end
+
+  def premium_feature?(feature)
+    return false unless PremiumBridge.enabled?
+
+    return false unless current_plan_data['status'].to_s == 'active'
+
+    features = current_plan_data['features']
+    if features.is_a?(Hash) && (features['features']&.include?('all') || features['features']&.include?(feature.to_s))
+      return true
+    end
+    return true if features.is_a?(Array) && (features.include?('all') || features.include?(feature.to_s))
+
+    false
+  end
+
+  def require_premium_feature!(feature)
+    return if premium_feature?(feature)
+
+    redirect_to settings_subscriptions_path, alert: "This feature requires a plan upgrade (#{feature})."
   end
 end

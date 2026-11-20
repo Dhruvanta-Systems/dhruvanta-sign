@@ -58,6 +58,8 @@ class SubmissionEvent < ApplicationRecord
     start_form: 'start_form',
     start_verification: 'start_verification',
     complete_verification: 'complete_verification',
+    voice_signature: 'voice_signature',
+    video_kyc_started: 'video_kyc_started',
     start_kba: 'start_kba',
     complete_kba: 'complete_kba',
     fail_kba: 'fail_kba',

@@ -22,7 +22,6 @@ ActiveSupport.on_load(:active_storage_attachment) do
   end
 end
 
-# rubocop:disable-next Metrics/BlockLength
 ActiveSupport.on_load(:active_storage_blob) do
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
   attribute :io_data, :string, default: ''

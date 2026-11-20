@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <%= csrf_meta_tags %>
+  <%= csp_meta_tag %>
+  <%= stylesheet_link_tag 'application' %>
+  <%= javascript_pack_tag 'application' %>
+  <style>body { margin: 0; padding: 0; } .navbar, .settings-nav, footer { display: none !important; }</style>
+</head>
+<body>
+  <%= yield %>
+  <div style="text-align:center;padding:8px 0;font-size:12px;color:#666;">
+    Powered by <a href="https://www.docuseal.com" target="_blank" rel="noopener" style="text-decoration:underline;color:#666;font-weight:500;">DocuSeal</a>
+    &middot; <a href="<%= Docuseal::SOURCE_CODE_URL %>" target="_blank" rel="noopener" style="text-decoration:underline;color:#666;" data-source-code-link>Source code</a>
+  </div>
+  <script>
+    const resizeObserver = new ResizeObserver(() => {
+      window.parent.postMessage({ type: 'docuseal:resize', height: document.body.scrollHeight }, '*');
+    });
+    resizeObserver.observe(document.body);
+  </script>
+</body>
+</html>

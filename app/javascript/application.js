@@ -68,6 +68,7 @@ import OpenModal from './elements/open_modal'
 import BarChart from './elements/bar_chart'
 import FieldCondition from './elements/field_condition'
 import ConfirmUpload from './elements/confirm_upload'
+import SetGeolocation from './elements/set_geolocation'
 import ScrollFade from './elements/scroll_fade'
 import OpenModalMobile from './elements/open_modal_mobile'
 import HistoryBack from './elements/history_back'
@@ -194,6 +195,7 @@ safeRegisterElement('google-drive-file-picker', GoogleDriveFilePicker)
 safeRegisterElement('open-modal', OpenModal)
 safeRegisterElement('bar-chart', BarChart)
 safeRegisterElement('field-condition', FieldCondition)
+safeRegisterElement('set-geolocation', SetGeolocation)
 safeRegisterElement('confirm-upload', ConfirmUpload)
 safeRegisterElement('scroll-fade', ScrollFade)
 safeRegisterElement('open-modal-mobile', OpenModalMobile)

@@ -1,26 +1,32 @@
 name: Build Docker Images
 
+# Runs on version tags only. The image is built on every tag; it is pushed only
+# when the repository variable DOCKER_IMAGE (for example "myorg/myimage") and the
+# secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN are set.
 on:
   push:
     tags:
       - "*.*.*"
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
     - name: Docker meta
       id: meta
-      uses: docker/metadata-action@v4
+      uses: docker/metadata-action@v5
       with:
-        images: docuseal/docuseal
+        images: ${{ vars.DOCKER_IMAGE || 'dhruvanta-sign' }}
         tags: type=semver,pattern={{version}}
 
     - name: Set up QEMU
@@ -35,6 +41,7 @@ jobs:
       run: echo "$REF_NAME" > .version
 
     - name: Login to Docker Hub
+      if: ${{ vars.DOCKER_IMAGE != '' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -44,6 +51,6 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        push: true
+        push: ${{ vars.DOCKER_IMAGE != '' }}
         platforms: linux/amd64,linux/arm64
         tags: ${{ steps.meta.outputs.tags }}

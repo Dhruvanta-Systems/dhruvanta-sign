@@ -77,6 +77,11 @@ module Submitters
       submitter.ua = request.user_agent
       submitter.timezone = request.params[:timezone] if ActiveSupport::TimeZone[request.params[:timezone].to_s]
 
+      if request.params[:geolocation].present?
+        geo = begin; JSON.parse(request.params[:geolocation]); rescue StandardError; nil; end
+        submitter.metadata = submitter.metadata.merge('geolocation' => geo) if geo.is_a?(Hash)
+      end
+
       submitter.values = merge_default_values(submitter)
 
       required_field_uuids_acc = Set.new

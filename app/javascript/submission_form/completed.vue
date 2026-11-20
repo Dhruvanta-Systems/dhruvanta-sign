@@ -106,6 +106,15 @@
         target="_blank"
         class="underline"
       >DocuSeal</a> - {{ t('open_source_documents_software') }}
+      <template v-if="sourceCodeUrl">
+        &middot;
+        <a
+          :href="sourceCodeUrl"
+          target="_blank"
+          rel="noopener"
+          class="underline"
+        >Source code</a>
+      </template>
     </div>
   </div>
 </template>
@@ -136,6 +145,11 @@ export default {
       type: Boolean,
       required: false,
       default: false
+    },
+    sourceCodeUrl: {
+      type: String,
+      required: false,
+      default: ''
     },
     attribution: {
       type: Boolean,

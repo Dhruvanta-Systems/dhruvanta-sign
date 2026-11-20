@@ -1,16 +1,23 @@
 # Reporting a Vulnerability
 
-If you come across any security concern or vulnarability, please report the information via email to security@docuseal.com instead of opening a GitHub issue. We will promptly respond and will collaborate with you to validate the issue, and resolve it ASAP.
+Please report security issues privately using GitHub private vulnerability
+reporting for this repository: open the repository's **Security** tab and choose
+**Report a vulnerability**. Please do not open a public issue or pull request for
+a suspected vulnerability.
 
-**We have a bug bounty program to reward security researchers.**
+We will acknowledge the report, work with you to confirm and fix the issue, and
+credit you if you wish.
 
-Out of scope vulnerabilities:
+Issues that affect upstream DocuSeal itself should also be reported to the
+upstream project through its own channels.
+
+Out of scope:
 
 - CSRF
 - DNSSEC, CAA, CSP headers
 - DNS or email security related
 - SSRF
 - DoS
-- Rate Limiting
+- Rate limiting
 
-Note: We reserve the right to classify any reported vulnerability as out of scope for the bug bounty program.
+We reserve the right to classify any report as out of scope.

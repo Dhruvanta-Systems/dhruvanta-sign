@@ -1,0 +1,9 @@
+<p>The following document is expiring in <strong><%= @days_left %> days</strong>:</p>
+<p><strong><%= @template_name %></strong></p>
+<p>Pending signers:</p>
+<ul>
+  <% @submission.submitters.where(completed_at: nil).each do |s| %>
+    <li><%= s.friendly_name || s.email || s.phone %></li>
+  <% end %>
+</ul>
+<p><%= link_to 'View submission', submission_url(@submission, **Docuseal.default_url_options) %></p>

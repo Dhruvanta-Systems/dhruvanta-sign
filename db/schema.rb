@@ -99,6 +99,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
   end
 
+  create_table "approval_steps", force: :cascade do |t|
+    t.bigint "submission_id", null: false
+    t.bigint "account_id", null: false
+    t.bigint "approver_id", null: false
+    t.integer "step_order", default: 0, null: false
+    t.string "status", default: "pending", null: false
+    t.text "comment"
+    t.datetime "acted_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_approval_steps_on_account_id"
+    t.index ["submission_id", "step_order"], name: "index_approval_steps_on_submission_id_and_step_order"
+    t.index ["submission_id"], name: "index_approval_steps_on_submission_id"
+  end
+
   create_table "completed_documents", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "sha256", null: false
@@ -441,6 +456,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
     t.index ["template_id", "id"], name: "index_submitters_on_template_id_and_id"
   end
 
+  create_table "subscriptions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "plan", default: "free", null: false
+    t.string "status", default: "active", null: false
+    t.string "provider"
+    t.string "provider_subscription_id"
+    t.datetime "current_period_start"
+    t.datetime "current_period_end"
+    t.datetime "cancelled_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "status"], name: "index_subscriptions_on_account_id_and_status"
+    t.index ["account_id"], name: "index_subscriptions_on_account_id"
+    t.index ["provider_subscription_id"], name: "index_subscriptions_on_provider_subscription_id", unique: true
+  end
+
   create_table "template_accesses", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "template_id", null: false
@@ -582,6 +613,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
     t.index ["webhook_url_id", "id"], name: "index_webhook_events_on_webhook_url_id_and_id"
   end
 
+  create_table "webhook_outbox", force: :cascade do |t|
+    t.string "target_aud", limit: 64, null: false
+    t.string "event_type", limit: 64, null: false
+    t.text "payload", null: false
+    t.string "delivery_id", limit: 36, null: false
+    t.string "status", limit: 16, default: "pending", null: false
+    t.integer "attempts", default: 0, null: false
+    t.text "last_error"
+    t.datetime "last_attempt_at"
+    t.datetime "sent_at"
+    t.datetime "created_at", null: false
+    t.index ["delivery_id"], name: "webhook_outbox_delivery_id_unique", unique: true
+    t.index ["status", "last_attempt_at"], name: "webhook_outbox_pending_idx"
+    t.index ["target_aud", "created_at"], name: "webhook_outbox_target_aud_idx", order: { created_at: :desc }
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying]::text[])", name: "webhook_outbox_status_chk"
+  end
+
   create_table "webhook_urls", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.datetime "created_at", null: false
@@ -598,10 +646,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
   add_foreign_key "access_tokens", "users"
   add_foreign_key "account_accesses", "accounts"
   add_foreign_key "account_configs", "accounts"
-  add_foreign_key "account_linked_accounts", "accounts"
   add_foreign_key "account_linked_accounts", "accounts", column: "linked_account_id"
+  add_foreign_key "account_linked_accounts", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "approval_steps", "submissions"
+  add_foreign_key "approval_steps", "users", column: "approver_id"
   add_foreign_key "document_generation_events", "submitters"
   add_foreign_key "document_metadata", "accounts"
   add_foreign_key "dynamic_document_versions", "dynamic_documents"
@@ -624,6 +674,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
   add_foreign_key "submissions", "users", column: "created_by_user_id"
   add_foreign_key "submitter_versions", "submitters"
   add_foreign_key "submitters", "submissions"
+  add_foreign_key "subscriptions", "accounts"
   add_foreign_key "template_accesses", "templates"
   add_foreign_key "template_folders", "accounts"
   add_foreign_key "template_folders", "template_folders", column: "parent_folder_id"

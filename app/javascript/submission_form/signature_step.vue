@@ -312,6 +312,91 @@
       :value="field.preferences.reason_field_uuid"
     >
     <div
+      v-if="showSupplementalActions && !modelValue && !computedPreviousValue"
+      class="mt-4 space-y-3"
+    >
+      <div
+        v-if="showVoiceConsent"
+        class="rounded-xl border border-base-300 bg-base-100 p-3"
+      >
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="text-sm font-medium">
+            {{ t('voice_consent') }}
+          </div>
+          <button
+            v-if="!isVoiceRecorderVisible && !hasVoiceConsent"
+            type="button"
+            class="btn btn-outline btn-sm"
+            @click.prevent="isVoiceRecorderVisible = true"
+          >
+            {{ t('record_voice_consent') }}
+          </button>
+          <div
+            v-else-if="hasVoiceConsent"
+            class="text-sm text-success"
+          >
+            {{ t('voice_consent_recorded') }}
+          </div>
+        </div>
+        <div
+          v-if="voiceConsentMessage"
+          class="text-xs text-base-content/70 mb-2"
+        >
+          {{ voiceConsentMessage }}
+        </div>
+        <VoiceSignatureStep
+          v-if="isVoiceRecorderVisible && !hasVoiceConsent"
+          :submitter-name="submitter.name || submitter.email || ''"
+          :t="t"
+          @submit="submitVoiceConsent"
+        />
+      </div>
+      <div
+        v-if="showVideoKyc"
+        class="rounded-xl border border-base-300 bg-base-100 p-3"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-medium">
+              {{ t('video_kyc') }}
+            </div>
+            <div
+              v-if="videoKycMessage"
+              class="text-xs text-base-content/70 mt-1"
+            >
+              {{ videoKycMessage }}
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div
+              v-if="isVideoKycVerified"
+              class="text-sm text-success"
+            >
+              {{ t('video_kyc_status_verified') }}
+            </div>
+            <button
+              v-if="canRefreshVideoKycStatus"
+              type="button"
+              class="btn btn-ghost btn-sm"
+              :disabled="isVideoKycLoading"
+              @click.prevent="refreshVideoKycStatus()"
+            >
+              {{ t('check_video_kyc_status') }}
+            </button>
+            <button
+              v-if="!isVideoKycVerified"
+              type="button"
+              class="btn btn-outline btn-sm"
+              :disabled="isVideoKycLoading"
+              @click.prevent="startVideoKyc"
+            >
+              {{ isVideoKycLoading ? t('processing') : t('start_video_kyc') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
       v-if="isShowQr"
       dir="auto"
       class="text-base-content/60 text-xs text-center w-full mt-1"
@@ -350,6 +435,7 @@ import SignaturePad from 'signature_pad'
 import AppearsOn from './appears_on'
 import FileDropzone from './dropzone'
 import MarkdownContent from './markdown_content'
+import VoiceSignatureStep from './voice_signature_step'
 import { v4 } from 'uuid'
 
 let fontLoadPromise = null
@@ -365,6 +451,7 @@ export default {
     IconCamera,
     IconQrcode,
     MarkdownContent,
+    VoiceSignatureStep,
     IconX,
     IconTextSize,
     IconSignature,
@@ -473,7 +560,14 @@ export default {
       isOtherReason: false,
       isUsePreviousValue: true,
       isTextSignature: !this.signatureSrc && (!!this.signatureText || this.field.preferences?.format === 'typed' || this.field.preferences?.format === 'typed_or_upload'),
-      uploadImageInputKey: Math.random().toString()
+      uploadImageInputKey: Math.random().toString(),
+      isVoiceRecorderVisible: false,
+      hasVoiceConsent: false,
+      voiceConsentMessage: '',
+      isVideoKycLoading: false,
+      videoKycMessage: '',
+      videoKycStatus: 'not_started',
+      videoKycPollTimeout: null
     }
   },
   computed: {
@@ -485,6 +579,21 @@ export default {
     },
     withSigningReason () {
       return this.requireSigningReason || this.field.preferences?.reasons?.length
+    },
+    showVoiceConsent () {
+      return this.field.preferences?.with_voice_consent === true
+    },
+    showVideoKyc () {
+      return this.field.preferences?.with_video_kyc === true
+    },
+    isVideoKycVerified () {
+      return this.videoKycStatus === 'verified'
+    },
+    canRefreshVideoKycStatus () {
+      return ['pending', 'failed', 'unavailable'].includes(this.videoKycStatus)
+    },
+    showSupplementalActions () {
+      return this.showVoiceConsent || this.showVideoKyc
     },
     defaultReasons () {
       return {
@@ -584,11 +693,16 @@ export default {
         this.loadFont()
       }
     }
+
+    if (this.showVideoKyc) {
+      this.refreshVideoKycStatus({ silent: true })
+    }
   },
   beforeUnmount () {
     this.intersectionObserver?.disconnect()
     this.resizeObserver?.disconnect()
     this.stopCheckSignature()
+    this.clearVideoKycPoll()
   },
   methods: {
     lockSwipe () {
@@ -686,6 +800,68 @@ export default {
     stopCheckSignature () {
       if (this.checkSignatureInterval) {
         clearInterval(this.checkSignatureInterval)
+      }
+    },
+    clearVideoKycPoll () {
+      if (this.videoKycPollTimeout) {
+        clearTimeout(this.videoKycPollTimeout)
+        this.videoKycPollTimeout = null
+      }
+    },
+    scheduleVideoKycStatusPoll () {
+      this.clearVideoKycPoll()
+
+      if (this.videoKycStatus !== 'pending') {
+        return
+      }
+
+      this.videoKycPollTimeout = window.setTimeout(() => {
+        this.refreshVideoKycStatus({ silent: true })
+      }, 3000)
+    },
+    videoKycMessageForStatus (status) {
+      if (status === 'verified') return this.t('video_kyc_status_verified')
+      if (status === 'failed') return this.t('video_kyc_status_failed')
+      if (status === 'pending') return this.t('video_kyc_status_pending')
+      if (status === 'unavailable') return this.t('video_kyc_failed')
+
+      return ''
+    },
+    async refreshVideoKycStatus ({ silent = false } = {}) {
+      try {
+        const resp = await fetch(this.baseUrl + '/s/' + this.submitterSlug + '/video_kyc', {
+          method: 'GET'
+        })
+
+        let data = {}
+
+        try {
+          data = await resp.json()
+        } catch (e) {}
+
+        if (!resp.ok) {
+          throw new Error(data.error || this.t('video_kyc_failed'))
+        }
+
+        this.videoKycStatus = data.status || 'not_started'
+
+        if (this.videoKycStatus !== 'not_started') {
+          this.videoKycMessage = this.videoKycMessageForStatus(this.videoKycStatus) || data.message || ''
+        } else if (!silent) {
+          this.videoKycMessage = ''
+        }
+
+        if (this.videoKycStatus === 'pending') {
+          this.scheduleVideoKycStatusPoll()
+        } else {
+          this.clearVideoKycPoll()
+        }
+      } catch (error) {
+        this.videoKycStatus = 'unavailable'
+        if (!silent) {
+          this.videoKycMessage = error.message || this.t('video_kyc_failed')
+        }
+        this.clearVideoKycPoll()
       }
     },
     checkSignature (params = {}) {
@@ -830,6 +1006,68 @@ export default {
 
       this.uploadImageInputKey = Math.random().toString()
     },
+    async submitVoiceConsent (audioBlob) {
+      this.voiceConsentMessage = ''
+
+      const formData = new FormData()
+
+      formData.append('audio', new File([audioBlob], 'voice_signature.webm', { type: audioBlob.type || 'audio/webm' }))
+
+      const resp = await fetch(this.baseUrl + '/s/' + this.submitterSlug + '/voice_signature', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!resp.ok) {
+        let message = 'Voice consent upload failed'
+
+        try {
+          const data = await resp.json()
+          message = data.error || message
+        } catch (e) {}
+
+        this.voiceConsentMessage = message
+        return
+      }
+
+      this.hasVoiceConsent = true
+      this.isVoiceRecorderVisible = false
+      this.voiceConsentMessage = this.t('voice_consent_recorded')
+    },
+    async startVideoKyc () {
+      this.isVideoKycLoading = true
+      this.videoKycMessage = ''
+
+      try {
+        const resp = await fetch(this.baseUrl + '/s/' + this.submitterSlug + '/video_kyc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        })
+
+        const data = await resp.json()
+
+        if (!resp.ok) {
+          throw new Error(data.error || this.t('video_kyc_failed'))
+        }
+
+        this.videoKycStatus = data.status || 'pending'
+        this.videoKycMessage = data.session_url
+          ? this.t('video_kyc_started')
+          : (this.videoKycMessageForStatus(this.videoKycStatus) || data.message || this.t('video_kyc_session_created_check_provider_response'))
+
+        if (data.session_url) {
+          window.open(data.session_url, '_blank', 'noopener,noreferrer')
+        }
+
+        this.scheduleVideoKycStatusPoll()
+      } catch (error) {
+        this.videoKycStatus = 'failed'
+        this.videoKycMessage = error.message || this.t('video_kyc_failed')
+      } finally {
+        this.isVideoKycLoading = false
+      }
+    },
     drawOnCanvas (file, canvas) {
       if (file && file.type.match('image.*')) {
         const reader = new FileReader()
@@ -935,6 +1173,11 @@ export default {
       })
     },
     async submit () {
+      if (this.showVideoKyc && !this.isVideoKycVerified) {
+        this.videoKycMessage = this.videoKycMessageForStatus(this.videoKycStatus) || this.t('video_kyc_required_before_continuing')
+        return Promise.reject(new Error('Video KYC required'))
+      }
+
       if (this.computedPrefillData) {
         return this.submitPrefillAttachment()
       }

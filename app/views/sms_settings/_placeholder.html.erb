@@ -1,15 +1,56 @@
-<div class="alert">
-  <%= svg_icon('info_circle', class: 'w-6 h-6') %>
-  <div>
-    <p class="font-bold">
-      <%= t('send_signature_requests_via_sms') %>
-    </p>
-    <p class="text-gray-700">
-      <%= t('unlock_with_docuseal_pro') %>
-      <br>
-      <a class="link font-medium" target="_blank" href="<%= Docuseal.multitenant? ? console_redirect_index_path(redir: "#{Docuseal::CONSOLE_URL}/plans") : "#{Docuseal::CLOUD_URL}/sign_up?#{{ redir: "#{Docuseal::CONSOLE_URL}/on_premises" }.to_query}" %>" data-turbo="false">
-        <%= t('learn_more') %>
-      </a>
-    </p>
-  </div>
+<div class="my-4">
+  <h2 class="text-xl font-bold mb-2"><%= t('sms_configuration') %></h2>
+  <% sms_config = EncryptedConfig.find_or_initialize_by(account: current_account, key: 'sms_configs') %>
+  <%= form_with url: settings_sms_path, method: :post, class: 'space-y-4' do %>
+    <div class="form-control">
+      <label class="label"><span class="label-text font-medium">Provider</span></label>
+      <select name="encrypted_config[value][provider]" class="base-select max-w-xs">
+        <option value="">Select provider...</option>
+        <option value="twilio" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'twilio' %>>Twilio</option>
+        <option value="msg91" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'msg91' %>>MSG91</option>
+        <option value="webhook" <%= 'selected' if sms_config.value.is_a?(Hash) && sms_config.value['provider'] == 'webhook' %>>Custom Webhook</option>
+      </select>
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">Account SID / Auth Key</span></label>
+      <input type="password" name="encrypted_config[value][account_sid]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['account_sid'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">Auth Token / Flow ID</span></label>
+      <input type="password" name="encrypted_config[value][auth_token]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['auth_token'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">From Number / Webhook URL</span></label>
+      <input type="text" name="encrypted_config[value][from_number]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['from_number'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <button type="submit" class="base-button"><%= t('save') %></button>
+  <% end %>
+</div>
+<div class="my-4 mt-8">
+  <h2 class="text-xl font-bold mb-2">WhatsApp Configuration</h2>
+  <% wa_config = EncryptedConfig.find_or_initialize_by(account: current_account, key: 'whatsapp_configs') %>
+  <%= form_with url: settings_sms_path(config_key: 'whatsapp_configs'), method: :post, class: 'space-y-4' do %>
+    <div class="form-control">
+      <label class="label"><span class="label-text font-medium">Provider</span></label>
+      <select name="encrypted_config[value][provider]" class="base-select max-w-xs">
+        <option value="">Select provider...</option>
+        <option value="gupshup" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'gupshup' %>>Gupshup</option>
+        <option value="twilio" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'twilio' %>>Twilio</option>
+        <option value="webhook" <%= 'selected' if wa_config.value.is_a?(Hash) && wa_config.value['provider'] == 'webhook' %>>Custom Webhook</option>
+      </select>
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">API Key / Account SID</span></label>
+      <input type="password" name="encrypted_config[value][api_key]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['api_key'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">Auth Token (Twilio only)</span></label>
+      <input type="password" name="encrypted_config[value][auth_token]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['auth_token'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <div class="form-control">
+      <label class="label"><span class="label-text">Source Number / Webhook URL</span></label>
+      <input type="text" name="encrypted_config[value][source_number]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['source_number'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+    </div>
+    <button type="submit" class="base-button">Save WhatsApp Configuration</button>
+  <% end %>
 </div>

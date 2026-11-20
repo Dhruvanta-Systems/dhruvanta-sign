@@ -115,6 +115,45 @@ class ProcessSubmitterCompletionJob
                                                              'event_uuid' => event_uuids['submission.completed'],
                                                              'webhook_url_id' => webhook.id)
     end
+
+    # Outbox events for the operator-configured receiver (separate from the
+    # per-account `WebhookUrl` surface above): every submitter completion emits
+    # `submitter_signed`, and the last submitter of a submission also emits
+    # `submission_completed`. The drain worker delivers them.
+    enqueue_event_webhooks(submitter, is_last: is_last)
+  end
+
+  def enqueue_event_webhooks(submitter, is_last:)
+    submission = submitter.submission
+    external_scope = Outbound::ExternalScope.for_submission(submission)
+
+    Outbound::WebhooksDispatcher.enqueue_submitter_signed(
+      submitter,
+      {
+        'event_type' => WebhookOutbox::EVENT_SUBMITTER_SIGNED,
+        'submitter_id' => submitter.id,
+        'submission_id' => submitter.submission_id,
+        'account_id' => submitter.account_id,
+        'completed_at' => submitter.completed_at&.iso8601
+      }.merge(external_scope)
+    )
+
+    if is_last
+      Outbound::WebhooksDispatcher.enqueue_submission_completed(
+        submission,
+        {
+          'event_type' => WebhookOutbox::EVENT_SUBMISSION_COMPLETED,
+          'submission_id' => submitter.submission_id,
+          'account_id' => submitter.account_id,
+          'completed_at' => submitter.completed_at&.iso8601
+        }.merge(external_scope)
+      )
+    end
+  rescue StandardError => e
+    # Defence in depth: the dispatcher swallows its own errors, but if an
+    # exception still escapes (for example serialisation), the parent submission
+    # flow must complete anyway.
+    Rails.logger.warn("[outbound-webhook-enqueue] submitter_signed/completed failed: #{e.message}")
   end
 
   def enqueue_completed_emails(submitter)

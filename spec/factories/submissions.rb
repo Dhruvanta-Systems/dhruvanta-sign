@@ -12,13 +12,17 @@ FactoryBot.define do
       submission.template_submitters = submission.template.submitters
     end
 
+    # Submitters must be built BEFORE the submission is saved so they are
+    # persisted in the same transaction. The `after_commit on: :create` webhook
+    # emitter then sees them, exactly as in production; building them in
+    # after(:create) made the emitter observe an empty submitters list.
     trait :with_submitters do
-      after(:create) do |submission, _|
-        submission.template_submitters.each do |template_submitter|
-          create(:submitter, submission:,
-                             account_id: submission.account_id,
-                             uuid: template_submitter['uuid'],
-                             created_at: submission.created_at)
+      before(:create) do |submission, _|
+        submission.template.submitters.each do |template_submitter|
+          submission.submitters.build(account_id: submission.template.account_id,
+                                      uuid: template_submitter['uuid'],
+                                      email: Faker::Internet.email,
+                                      name: Faker::Name.name)
         end
       end
     end

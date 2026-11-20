@@ -77,6 +77,10 @@ module Api
 
       WebhookUrls.enqueue_events(submissions, 'submission.created')
 
+      # The `submission_created` outbox event is emitted from
+      # `Submission#after_commit on: :create` (see
+      # `Outbound::SubmissionWebhookEmitter`), so every creation path covers it.
+
       Submissions.send_signature_requests(submissions)
 
       submissions.each do |submission|

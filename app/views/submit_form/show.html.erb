@@ -20,6 +20,11 @@
       <%# flex block w-full sticky top-0 z-50 space-x-2 items-center bg-yellow-100 p-2 border-y border-yellow-200 transition-transform duration-300 %>
       <%= banner_html || capture do %>
         <%= render('submit_form/banner') %>
+        <% if @submitter.account.logo.attached? %>
+          <div class="text-center mb-4">
+            <%= image_tag url_for(@submitter.account.logo), class: 'max-h-12 max-w-40 object-contain mx-auto', alt: '' %>
+          </div>
+        <% end %>
         <header id="signing_form_header" class="sticky min-[1230px]:static top-0 z-50 bg-base-100 py-2 px-2 flex items-center md:-mx-[8px]" style="margin-bottom: -16px">
           <h1 class="text-xl md:text-2xl font-medium focus:text-clip" style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
             <%= @submitter.submission.name || @submitter.submission.template&.name %>
@@ -174,6 +179,7 @@
     </div>
   </div>
 </div>
+<set-geolocation data-name="geolocation"></set-geolocation>
 <div class="fixed bottom-0 w-full h-0 z-50">
   <div class="mx-auto" style="max-width: 1000px">
     <div class="relative md:mx-32">

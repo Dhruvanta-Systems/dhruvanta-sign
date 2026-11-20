@@ -1,0 +1,10 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders, not credentials"
+regexes = [
+  '''^API_TOKEN$''',
+]

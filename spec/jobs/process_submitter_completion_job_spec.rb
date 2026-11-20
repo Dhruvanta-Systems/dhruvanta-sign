@@ -48,4 +48,29 @@ RSpec.describe ProcessSubmitterCompletionJob do
       end.to raise_error(ActiveRecord::RecordNotFound)
     end
   end
+
+  describe '#enqueue_event_webhooks' do
+    it 'adds event type and external scope to signed and completed payloads' do
+      external_tenant_id = SecureRandom.uuid
+      external_user_id = SecureRandom.uuid
+      create(:account_config, account:, key: AccountConfig::EXTERNAL_TENANT_ID_KEY, value: external_tenant_id)
+      create(:user_config, user:, key: UserConfig::EXTERNAL_USER_ID_KEY, value: external_user_id)
+
+      described_class.new.enqueue_event_webhooks(submitter, is_last: true)
+
+      signed = JSON.parse(WebhookOutbox.find_by!(event_type: WebhookOutbox::EVENT_SUBMITTER_SIGNED).payload)
+      completed = JSON.parse(WebhookOutbox.find_by!(event_type: WebhookOutbox::EVENT_SUBMISSION_COMPLETED).payload)
+
+      expect(signed).to include(
+        'event_type' => 'submitter_signed',
+        'external_tenant_id' => external_tenant_id,
+        'external_user_id' => external_user_id
+      )
+      expect(completed).to include(
+        'event_type' => 'submission_completed',
+        'external_tenant_id' => external_tenant_id,
+        'external_user_id' => external_user_id
+      )
+    end
+  end
 end

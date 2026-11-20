@@ -5,7 +5,13 @@ module Docuseal
   PRODUCT_EMAIL_URL = ENV.fetch('PRODUCT_EMAIL_URL', PRODUCT_URL)
   NEWSLETTER_URL = "#{PRODUCT_URL}/newsletters".freeze
   PRODUCT_NAME = 'DocuSeal'
+  DISPLAY_PRODUCT_NAME = 'Dhruvanta Sign'
+  DISPLAY_SHORT_NAME = 'Dhruvanta Sign'
+  DISPLAY_DESCRIPTION =
+    'Dhruvanta Sign is a document signing app powered by DocuSeal for open-source document signing workflows.'
   DEFAULT_APP_URL = ENV.fetch('APP_URL', 'http://localhost:3000')
+  # AGPL-3.0 section 13: link to the Corresponding Source of this modified version.
+  SOURCE_CODE_URL = ENV['SOURCE_CODE_URL'].to_s.strip.presence || 'https://github.com/Dhruvanta-Systems/dhruvanta-sign'
   GITHUB_URL = 'https://github.com/docusealco/docuseal'
   DISCORD_URL = 'https://discord.gg/qygYCDGck9'
   TWITTER_URL = 'https://twitter.com/docusealco'
@@ -118,6 +124,22 @@ module Docuseal
 
   def product_name
     PRODUCT_NAME
+  end
+
+  def display_product_name
+    DISPLAY_PRODUCT_NAME
+  end
+
+  def display_short_name
+    DISPLAY_SHORT_NAME
+  end
+
+  def display_title
+    "#{display_product_name} | Secure Document Signing"
+  end
+
+  def display_description
+    DISPLAY_DESCRIPTION
   end
 
   def refresh_default_url_options!

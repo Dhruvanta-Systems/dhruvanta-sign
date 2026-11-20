@@ -4,6 +4,10 @@ class StartFormController < ApplicationController
   layout 'form'
 
   skip_before_action :authenticate_user!
+  # Do not redirect signer URLs to the `/setup` wizard when the host has no admin
+  # user yet: a stale or mistyped `/d/<slug>` should 404 through the controller's
+  # normal `RecordNotFound` rescue.
+  skip_before_action :maybe_redirect_to_setup
   skip_authorization_check
 
   around_action :with_browser_locale, only: %i[show update completed]

@@ -5,7 +5,10 @@
     <% if Docuseal.enable_pwa? %>
       <link rel="manifest" href="/manifest.json">
     <% end %>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <%# WCAG 1.4.4 (Resize Text, AA) requires text to be resizable up to 200%, so
+        the viewport must not set `maximum-scale` or `user-scalable=no`. The
+        signer-facing layouts (form/embed/plain) already omit the lock. %>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <%= csrf_meta_tags %>
     <meta name="turbo-refresh-method" content="morph">
     <meta name="turbo-refresh-scroll" content="preserve">
@@ -34,6 +37,13 @@
     <main class="max-w-6xl mx-auto px-4 md:px-2 mb-8">
       <%= yield %>
     </main>
+    <%# Original DocuSeal attribution required by LICENSE_ADDITIONAL_TERMS (AGPL section 7(b))
+        in interactive user interfaces. Do not remove. %>
+    <% unless turbo_native_app? %>
+      <footer id="docuseal_attribution" class="max-w-6xl mx-auto px-4 md:px-2 pb-6 text-sm">
+        <%= render 'shared/attribution' %>
+      </footer>
+    <% end %>
     <% if flash.present? %><%= render 'shared/flash' %><% end %>
     <%= render 'shared/body_scripts' %>
   </body>

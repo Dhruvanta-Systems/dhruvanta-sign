@@ -371,12 +371,12 @@ GEM
     pry-rails (0.3.11)
       pry (>= 0.13.0)
     public_suffix (7.0.5)
-    puma (8.0.2)
+    puma (8.1.2)
       nio4r (~> 2.0)
     racc (1.8.1)
     rack (3.2.8)
-    rack-proxy (0.7.7)
-      rack
+    rack-proxy (2.0.2)
+      rack (>= 2.0, < 4)
     rack-session (2.1.2)
       base64 (>= 0.1.0)
       rack (>= 3.0.0)
@@ -668,4 +668,4 @@ RUBY VERSION
   ruby 4.0.10
 
 BUNDLED WITH
-  4.0.3
+  4.0.20

@@ -5,6 +5,12 @@ class ConsoleRedirectController < ApplicationController
   skip_authorization_check
 
   def index
+    unless Docuseal.multitenant?
+      return redirect_to(new_user_session_path(redir: settings_subscriptions_path)) if true_user.blank?
+
+      return redirect_to(settings_subscriptions_path)
+    end
+
     if request.path == '/upgrade'
       params[:redir] = Docuseal.multitenant? ? "#{Docuseal::CONSOLE_URL}/plans" : "#{Docuseal::CONSOLE_URL}/on_premises"
     end

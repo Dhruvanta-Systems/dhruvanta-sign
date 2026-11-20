@@ -98,6 +98,34 @@
         <span>{{ t('signature_id') }}</span>
       </label>
       <label
+        v-if="showVoiceConsent"
+        class="field-settings-voice-consent w-full px-2 py-1 rounded-md hover:bg-neutral-100 flex items-center space-x-2 text-sm cursor-pointer"
+        @click.stop
+      >
+        <input
+          :checked="field.preferences?.with_voice_consent === true"
+          type="checkbox"
+          class="toggle toggle-xs"
+          @change="handleToggleVoiceConsent($event.target.checked)"
+          @click.stop
+        >
+        <span>{{ t('voice_consent') }}</span>
+      </label>
+      <label
+        v-if="showVideoKyc"
+        class="field-settings-video-kyc w-full px-2 py-1 rounded-md hover:bg-neutral-100 flex items-center space-x-2 text-sm cursor-pointer"
+        @click.stop
+      >
+        <input
+          :checked="field.preferences?.with_video_kyc === true"
+          type="checkbox"
+          class="toggle toggle-xs"
+          @change="handleToggleVideoKyc($event.target.checked)"
+          @click.stop
+        >
+        <span>{{ t('video_kyc') }}</span>
+      </label>
+      <label
         v-if="showChecked"
         class="field-settings-checked w-full px-2 py-1 rounded-md hover:bg-neutral-100 flex items-center space-x-2 text-sm cursor-pointer"
         @click.stop
@@ -121,7 +149,7 @@
         @select="handleSelectVerificationMethod"
       />
       <hr
-        v-if="showRequired || showReadOnly || showPrefillable || showSetSigningDate || showWithLogo || showSignatureId"
+        v-if="showRequired || showReadOnly || showPrefillable || showSetSigningDate || showWithLogo || showSignatureId || showVoiceConsent || showVideoKyc"
         class="my-1 border-neutral-200"
       >
       <ContextSubmenu
@@ -643,6 +671,12 @@ export default {
     showSignatureId () {
       return [true, false].includes(this.withSignatureId) && this.field.type === 'signature'
     },
+    showVoiceConsent () {
+      return this.field.type === 'signature'
+    },
+    showVideoKyc () {
+      return this.field.type === 'signature'
+    },
     showChecked () {
       return this.field.type === 'checkbox'
     },
@@ -885,6 +919,18 @@ export default {
     handleToggleSignatureId (value) {
       this.field.preferences ||= {}
       this.field.preferences.with_signature_id = value
+
+      this.$emit('save')
+    },
+    handleToggleVoiceConsent (value) {
+      this.field.preferences ||= {}
+      this.field.preferences.with_voice_consent = value
+
+      this.$emit('save')
+    },
+    handleToggleVideoKyc (value) {
+      this.field.preferences ||= {}
+      this.field.preferences.with_video_kyc = value
 
       this.$emit('save')
     },

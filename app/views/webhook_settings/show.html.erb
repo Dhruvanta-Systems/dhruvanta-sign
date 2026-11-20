@@ -82,6 +82,22 @@
         <% end %>
       </div>
     </div>
+    <% if @webhook_url.persisted? && (@webhook_events.present? || params[:status].present?) %>
+      <div class="stats shadow mt-6 w-full">
+        <div class="stat">
+          <div class="stat-title"><%= t('total') %></div>
+          <div class="stat-value text-sm"><%= @webhook_url.webhook_events.count %></div>
+        </div>
+        <div class="stat">
+          <div class="stat-title"><%= t('succeeded') %></div>
+          <div class="stat-value text-sm text-success"><%= @webhook_url.webhook_events.where(status: 'success').count %></div>
+        </div>
+        <div class="stat">
+          <div class="stat-title"><%= t('failed') %></div>
+          <div class="stat-value text-sm text-error"><%= @webhook_url.webhook_events.where(status: 'error').count %></div>
+        </div>
+      </div>
+    <% end %>
     <% if @webhook_events.present? || params[:status].present? %>
       <div class="mt-6">
         <h2 id="log" class="text-2xl md:text-3xl font-bold"><%= t('event_log') %></h2>
