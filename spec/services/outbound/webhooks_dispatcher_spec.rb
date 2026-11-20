@@ -23,7 +23,7 @@ RSpec.describe Outbound::WebhooksDispatcher do
                 event_type: WebhookOutbox::EVENT_SUBMISSION_CREATED,
                 delivery_id: SecureRandom.uuid)
     WebhookOutbox.new(
-      target_aud: WebhookOutbox::TARGET_DEFAULT,
+      target: WebhookOutbox::TARGET_DEFAULT,
       event_type: event_type,
       payload: payload,
       delivery_id: delivery_id,
@@ -135,7 +135,7 @@ RSpec.describe Outbound::WebhooksDispatcher do
   end
 
   describe '.compute_delivery_id' do
-    it 'is deterministic for the same (target_aud, event_type, key) tuple' do
+    it 'is deterministic for the same (target, event_type, key) tuple' do
       a = described_class.compute_delivery_id('default', 'submission_created', 'sub-1')
       b = described_class.compute_delivery_id('default', 'submission_created', 'sub-1')
       expect(a).to eq(b)

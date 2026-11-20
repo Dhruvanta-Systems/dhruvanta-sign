@@ -9,6 +9,9 @@ module JwtSso
   #   JWT_SSO_JWKS_URL       URL of the issuer's JWKS document (required)
   #   JWT_SSO_AUDIENCE       expected value of the audience claim (required)
   #   JWT_SSO_ALGORITHM      signature algorithm, ES256 (default), ES384, RS256 or RS384
+  #   JWT_SSO_LOGIN_URL      where GET /sso/start sends the browser to sign in; it
+  #                          receives `state` and `redirect_uri` query parameters
+  #   JWT_SSO_CLAIM_NONCE    claim that must echo `state` (default "nonce")
   #   JWT_SSO_CLAIM_AUDIENCE audience claim name (default "aud")
   #   JWT_SSO_CLAIM_EMAIL    email claim name (default "email")
   #   JWT_SSO_CLAIM_NAME     display name claim (default "name")
@@ -37,6 +40,10 @@ module JwtSso
       value = env('JWT_SSO_ALGORITHM').upcase
       ALGORITHMS.include?(value) ? value : 'ES256'
     end
+
+    def login_url = env('JWT_SSO_LOGIN_URL')
+
+    def nonce_claim = env('JWT_SSO_CLAIM_NONCE', 'nonce')
 
     def audience_claim = env('JWT_SSO_CLAIM_AUDIENCE', 'aud')
 

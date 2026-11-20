@@ -17,6 +17,9 @@ module JwtSso
   #   * `iat` and `exp` are required; `exp` must be in the future, `iat` no more
   #     than 30 seconds ahead and no older than JWT_SSO_MAX_AGE_SECONDS, and the
   #     lifetime (`exp - iat`) no longer than that maximum (default 5 minutes)
+  #   * the nonce claim (JWT_SSO_CLAIM_NONCE, default `nonce`) must equal the
+  #     state stored in the visitor's own cookie, so the token is bound to the
+  #     browser that started the flow
   #   * `jti` must not have been seen before. It is remembered for the full
   #     maximum lifetime, so an accepted token can never be replayed while it is
   #     still valid. The store is `Rails.cache`; behind several app servers it
@@ -70,7 +73,7 @@ module JwtSso
 
     # @return [VerifiedHandoff]
     # @raise [HandoffError] with a machine readable code on any failure
-    def verify_handoff(token)
+    def verify_handoff(token, expected_nonce:)
       raise NotConfiguredError unless JwtSso::Config.enabled?
       raise HandoffError.new('sso-handoff-missing', :unauthorized) if blank?(token)
 
@@ -89,6 +92,7 @@ module JwtSso
       validate_audience!(claims)
       validate_exp!(claims)
       validate_iat!(claims)
+      validate_nonce!(claims, expected_nonce)
       jti = validate_and_capture_jti!(claims)
       tier = validate_tier!(claims)
 
@@ -233,6 +237,18 @@ module JwtSso
       max_age = JwtSso::Config.max_age
       raise HandoffError.new('sso-handoff-too-old', :unauthorized) if Time.at(iat).utc < now - max_age
       raise HandoffError.new('sso-handoff-lifetime-too-long', :unauthorized) if claims['exp'] - iat > max_age
+    end
+
+    # The token must be minted for THIS browser: it has to carry the nonce that
+    # {JwtSsoHandoffController#start} put in the visitor's cookie. A token
+    # obtained by someone else therefore cannot sign a victim's browser in.
+    def validate_nonce!(claims, expected_nonce)
+      raise HandoffError.new('sso-handoff-state-missing', :unauthorized) if blank?(expected_nonce)
+
+      actual = claims[JwtSso::Config.nonce_claim].to_s
+      return if !actual.empty? && ActiveSupport::SecurityUtils.secure_compare(actual, expected_nonce.to_s)
+
+      raise HandoffError.new('sso-handoff-nonce-mismatch', :unauthorized)
     end
 
     def replay_ttl

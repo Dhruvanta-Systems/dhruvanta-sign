@@ -22,7 +22,7 @@ RSpec.describe Outbound::SubmissionWebhookEmitter do
       rows = WebhookOutbox.where(event_type: WebhookOutbox::EVENT_SUBMISSION_CREATED)
       expect(rows.count).to eq(1)
       expect(rows.first).to be_pending
-      expect(rows.first.target_aud).to eq(WebhookOutbox::TARGET_DEFAULT)
+      expect(rows.first.target).to eq(WebhookOutbox::TARGET_DEFAULT)
     end
 
     it 'is idempotent on a re-emit against the same submission (single row)' do

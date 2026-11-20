@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gin"
   enable_extension "pg_catalog.plpgsql"
@@ -614,7 +614,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
   end
 
   create_table "webhook_outbox", force: :cascade do |t|
-    t.string "target_aud", limit: 64, null: false
+    t.string "target", limit: 64, null: false
     t.string "event_type", limit: 64, null: false
     t.text "payload", null: false
     t.string "delivery_id", limit: 36, null: false
@@ -626,7 +626,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
     t.datetime "created_at", null: false
     t.index ["delivery_id"], name: "webhook_outbox_delivery_id_unique", unique: true
     t.index ["status", "last_attempt_at"], name: "webhook_outbox_pending_idx"
-    t.index ["target_aud", "created_at"], name: "webhook_outbox_target_aud_idx", order: { created_at: :desc }
+    t.index ["target", "created_at"], name: "webhook_outbox_target_idx", order: { created_at: :desc }
     t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying]::text[])", name: "webhook_outbox_status_chk"
   end
 

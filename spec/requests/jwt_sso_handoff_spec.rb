@@ -32,6 +32,9 @@ describe 'JWT SSO handoff receiver' do
              'JWT_SSO_CLAIM_TENANT' => 'tenantId', 'JWT_SSO_CLAIM_TIER' => 'tier',
              'JWT_SSO_ALLOWED_TIERS' => 'pro,enterprise')
 
+    stub_env('JWT_SSO_LOGIN_URL' => 'https://idp.example.test/login')
+    start_flow
+
     # Reset Rails.cache so the replay-defence in-memory store starts
     # empty for each example. DocuSeal's test environment uses
     # `:null_store` so `write(unless_exist: true)` always succeeds —
@@ -46,6 +49,13 @@ describe 'JWT SSO handoff receiver' do
       headers: { 'Content-Type' => 'application/json' },
       body: { keys: [@jwk.export] }.to_json
     )
+  end
+
+  # Begins the browser-bound flow: GET /sso/start sets the state cookie and sends
+  # the browser to the identity provider with the state in the query string.
+  def start_flow
+    get '/sso/start'
+    @state = Rack::Utils.parse_query(URI.parse(response.location).query)['state']
   end
 
   def stub_env(values)
@@ -70,6 +80,7 @@ describe 'JWT SSO handoff receiver' do
       tier: 'pro',
       email: 'sso-user@example.com',
       email_verified: true,
+      nonce: @state,
       name: 'Ada Lovelace',
       iat: now,
       exp: now + 30,
@@ -88,7 +99,7 @@ describe 'JWT SSO handoff receiver' do
       external_tenant_id = SecureRandom.uuid
       token = mint_token(sub: external_user_id, tenantId: external_tenant_id)
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:ok)
       body = response.parsed_body
@@ -119,7 +130,7 @@ describe 'JWT SSO handoff receiver' do
       token = mint_token(email: 'existing@example.com', name: 'Pre Existing',
                          sub: external_user_id, tenantId: external_tenant_id)
 
-      expect { post '/api/auth/sso-handoff', params: { token: token }, as: :json }
+      expect { post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json }
         .not_to(change { User.count })
 
       expect(response).to have_http_status(:ok)
@@ -134,7 +145,7 @@ describe 'JWT SSO handoff receiver' do
       now = Time.now.utc.to_i
       token = mint_token(iat: now - 120, exp: now - 60)
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.media_type).to eq('application/problem+json')
@@ -144,7 +155,7 @@ describe 'JWT SSO handoff receiver' do
     it 'rejects a wrong audience with 403 and code sso-handoff-wrong-aud' do
       token = mint_token(aud: 'another-app')
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:forbidden)
       expect(response.media_type).to eq('application/problem+json')
@@ -157,7 +168,7 @@ describe 'JWT SSO handoff receiver' do
       # differ — verification must fail closed.
       token = mint_token({}, signing_key: foreign_key, kid: @kid)
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body['code']).to eq('sso-handoff-signature-invalid')
@@ -177,7 +188,7 @@ describe 'JWT SSO handoff receiver' do
 
       token = mint_token
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:ok)
       assert_requested :get, jwks_url, times: 2
@@ -188,7 +199,7 @@ describe 'JWT SSO handoff receiver' do
 
       token = mint_token
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:service_unavailable)
       expect(response.media_type).to eq('application/problem+json')
@@ -198,10 +209,10 @@ describe 'JWT SSO handoff receiver' do
     it 'rejects a replayed jti within the replay window with 409 sso-handoff-jti-replayed' do
       token = mint_token(jti: 'replayed-jti')
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
       expect(response).to have_http_status(:ok)
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
       expect(response).to have_http_status(:conflict)
       expect(response.parsed_body['code']).to eq('sso-handoff-jti-replayed')
     end
@@ -210,7 +221,7 @@ describe 'JWT SSO handoff receiver' do
       existing = create(:user, account: create(:account), email: 'existing@example.com')
       token = mint_token(email: 'existing@example.com', email_verified: false, sub: 'attacker-sub')
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body['user_id']).not_to eq(existing.uuid)
@@ -221,7 +232,7 @@ describe 'JWT SSO handoff receiver' do
       now = Time.now.utc.to_i
       token = mint_token(iat: now, exp: now + 86_400)
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body['code']).to eq('sso-handoff-lifetime-too-long')
@@ -230,11 +241,11 @@ describe 'JWT SSO handoff receiver' do
     it 'rejects a long-lived token replayed after the old 90 second window' do
       now = Time.now.utc.to_i
       token = mint_token(iat: now, exp: now + 290, jti: 'long-lived')
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
       expect(response).to have_http_status(:ok)
 
       travel_to(200.seconds.from_now) do
-        post '/api/auth/sso-handoff', params: { token: token }, as: :json
+        post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
       end
 
       expect(response).to have_http_status(:conflict)
@@ -244,14 +255,14 @@ describe 'JWT SSO handoff receiver' do
     it 'rejects a token with the wrong issuer with 401 sso-handoff-wrong-issuer' do
       token = mint_token(iss: 'https://attacker.example/')
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body['code']).to eq('sso-handoff-wrong-issuer')
     end
 
     it 'rejects an empty token with 401 sso-handoff-missing' do
-      post '/api/auth/sso-handoff', params: { token: '' }, as: :json
+      post '/api/auth/sso-handoff', params: { token: '', state: @state }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body['code']).to eq('sso-handoff-missing')
@@ -260,7 +271,7 @@ describe 'JWT SSO handoff receiver' do
     it 'rejects a tier outside the allow-list with 403 and code sso-handoff-tier-not-allowed' do
       token = mint_token(tier: 'free')
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:forbidden)
       expect(response.media_type).to eq('application/problem+json')
@@ -272,7 +283,7 @@ describe 'JWT SSO handoff receiver' do
                  iat: Time.now.utc.to_i, exp: Time.now.utc.to_i + 30, jti: SecureRandom.uuid }
       token = JWT.encode(claims, @ec_key, 'ES256', { kid: @kid, typ: 'JWT' })
 
-      post '/api/auth/sso-handoff', params: { token: token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
 
       expect(response).to have_http_status(:forbidden)
       expect(response.parsed_body['code']).to eq('sso-handoff-tier-not-allowed')
@@ -281,32 +292,107 @@ describe 'JWT SSO handoff receiver' do
     it 'answers 404 when the receiver is not configured' do
       stub_env('JWT_SSO_ISSUER' => '')
 
-      post '/api/auth/sso-handoff', params: { token: mint_token }, as: :json
+      post '/api/auth/sso-handoff', params: { token: mint_token, state: @state }, as: :json
 
       expect(response).to have_http_status(:not_found)
       expect(response.parsed_body['code']).to eq('sso-handoff-not-configured')
     end
   end
 
-  describe 'GET /sso/handoff' do
-    it 'verifies + signs the user in + redirects to root on success' do
-      token = mint_token
+  describe 'GET /sso/start' do
+    it 'redirects to the login URL with a random state and the handoff address, and sets an HttpOnly cookie' do
+      get '/sso/start'
 
-      get '/sso/handoff', params: { token: token }
+      uri = URI.parse(response.location)
+      query = Rack::Utils.parse_query(uri.query)
+      expect("#{uri.scheme}://#{uri.host}#{uri.path}").to eq('https://idp.example.test/login')
+      expect(query['state'].length).to be >= 40
+      expect(query['redirect_uri']).to end_with('/sso/handoff')
+      cookie = response.headers['Set-Cookie']
+      expect(cookie).to include('sso_state=')
+      expect(cookie.downcase).to include('httponly')
+      expect(cookie.downcase).to include('samesite=lax')
+      expect(cookie).not_to include(query['state'])
+    end
+
+    it 'answers 404 when no login URL is configured' do
+      stub_env('JWT_SSO_LOGIN_URL' => '')
+
+      get '/sso/start'
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe 'browser binding' do
+    it 'has no GET handoff route, so a token can never sit in a URL' do
+      expect { get '/sso/handoff', params: { token: mint_token } }.to raise_error(ActionController::RoutingError)
+    end
+
+    it 'rejects a handoff from a browser that never started the flow (login CSRF)' do
+      token = mint_token
+      reset! # a different browser: no state cookie
+      expect(User.count).to eq(0)
+
+      post '/api/auth/sso-handoff', params: { token: token, state: @state }, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body['code']).to eq('sso-handoff-state-mismatch')
+      expect(User.count).to eq(0)
+    end
+
+    it 'rejects a posted state that is not the cookie state' do
+      post '/api/auth/sso-handoff', params: { token: mint_token, state: 'attacker-state' }, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body['code']).to eq('sso-handoff-state-mismatch')
+    end
+
+    it 'rejects a token whose nonce is not the cookie state, even with a matching posted state' do
+      post '/api/auth/sso-handoff', params: { token: mint_token(nonce: 'someone-elses'), state: @state }, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body['code']).to eq('sso-handoff-nonce-mismatch')
+    end
+
+    it 'rejects a token without a nonce' do
+      post '/api/auth/sso-handoff', params: { token: mint_token(nonce: nil), state: @state }, as: :json
+
+      expect(response.parsed_body['code']).to eq('sso-handoff-nonce-mismatch')
+    end
+
+    it 'consumes the state: a second handoff in the same browser is refused' do
+      post '/api/auth/sso-handoff', params: { token: mint_token, state: @state }, as: :json
+      expect(response).to have_http_status(:ok)
+
+      post '/api/auth/sso-handoff', params: { token: mint_token, state: @state }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body['code']).to eq('sso-handoff-state-mismatch')
+    end
+  end
+
+  describe 'POST /sso/handoff (browser form post)' do
+    it 'verifies, signs the user in and redirects to root on success' do
+      post '/sso/handoff', params: { token: mint_token, state: @state }
 
       expect(response).to redirect_to('/')
       expect(User.last.email).to eq('sso-user@example.com')
     end
 
-    it 'redirects to /sign_in?reason=sso-failed&code=... on verify-stage failure' do
+    it 'redirects to the sign-in page with a machine code on failure, without echoing the token' do
       now = Time.now.utc.to_i
       token = mint_token(iat: now - 120, exp: now - 60)
 
-      get '/sso/handoff', params: { token: token }
+      post '/sso/handoff', params: { token: token, state: @state }
 
       expect(response).to be_redirect
       expect(response.location).to include('reason=sso-failed')
       expect(response.location).to include('code=sso-handoff-expired')
+      expect(response.location).not_to include(token)
+    end
+
+    it 'is filtered out of the logs' do
+      expect(Rails.application.config.filter_parameters).to include(:token)
     end
   end
 end

@@ -125,14 +125,14 @@ module Outbound
       row = result.row
       delivery_id = row.delivery_id.to_s
       target_id_hash = Digest::SHA256.hexdigest(
-        "#{row.target_aud}:#{row.event_type}:#{delivery_id}"
+        "#{row.target}:#{row.event_type}:#{delivery_id}"
       )
 
       payload = {
         'event_code' => result.success ? AUDIT_EMITTED : AUDIT_EMIT_FAILED,
         'occurred_at' => Time.current.utc.iso8601,
         'actor_user_id' => nil,
-        'actor_tenant_id' => nil,
+        'actor_account_id' => nil,
         'target_id_type' => 'DOCUSEAL_WEBHOOK',
         'target_id_hash' => target_id_hash,
         'provider_ref' => delivery_id,
@@ -142,8 +142,8 @@ module Outbound
           'attempts' => row.attempts,
           'httpStatus' => result.http_status
         }.compact,
-        'product_aud' => row.target_aud,
-        'webhook_source' => 'docuseal'
+        'audience' => row.target,
+        'source' => 'docuseal'
       }
       Rails.logger.info("[docuseal-webhook-audit] #{JSON.generate(payload)}")
     rescue StandardError => e

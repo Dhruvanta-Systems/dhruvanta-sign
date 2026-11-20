@@ -34,25 +34,25 @@ module Outbound
 
     # Insert a `pending` outbox row inside the originating domain
     # transaction. The `delivery_id` is derived deterministically from
-    # `(target_aud, event_type, idempotency_key)` so a re-call against
+    # `(target, event_type, idempotency_key)` so a re-call against
     # the same domain entity dedupes via the UNIQUE constraint.
     #
     # Returns the row's `delivery_id` on success, nil on failure
     # (logged + swallowed per the additive-failure contract).
-    def enqueue(target_aud, event_type, payload, idempotency_key)
-      if target_aud.to_s.empty? || event_type.to_s.empty? || payload.nil?
+    def enqueue(target, event_type, payload, idempotency_key)
+      if target.to_s.empty? || event_type.to_s.empty? || payload.nil?
         Rails.logger.warn(
-          "[outbound-webhook-enqueue] invalid-args target_aud=#{target_aud.inspect} " \
+          "[outbound-webhook-enqueue] invalid-args target=#{target.inspect} " \
           "event_type=#{event_type.inspect}"
         )
         return nil
       end
 
       payload_json = payload.is_a?(String) ? payload : JSON.generate(payload)
-      delivery_id = compute_delivery_id(target_aud, event_type, idempotency_key)
+      delivery_id = compute_delivery_id(target, event_type, idempotency_key)
 
       WebhookOutbox.create!(
-        target_aud: target_aud,
+        target: target,
         event_type: event_type,
         payload: payload_json,
         delivery_id: delivery_id,
@@ -63,17 +63,17 @@ module Outbound
       delivery_id
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
       # `RecordNotUnique` is the desired idempotent shape — another
-      # path enqueued the same (target_aud, event_type, idempotency_key)
+      # path enqueued the same (target, event_type, idempotency_key)
       # tuple; the existing row's delivery_id is the same value we
       # just computed, so callers can correlate.
       Rails.logger.info(
-        "[outbound-webhook-enqueue] duplicate-suppressed target_aud=#{target_aud} " \
+        "[outbound-webhook-enqueue] duplicate-suppressed target=#{target} " \
         "event_type=#{event_type} delivery_id=#{delivery_id} reason=#{e.class.name}"
       )
       delivery_id
     rescue StandardError => e
       Rails.logger.warn(
-        "[outbound-webhook-enqueue] failed target_aud=#{target_aud} " \
+        "[outbound-webhook-enqueue] failed target=#{target} " \
         "event_type=#{event_type} reason=#{e.message}"
       )
       nil
@@ -200,12 +200,12 @@ module Outbound
     end
 
     # Deterministic UUIDv5-style derivation from
-    # `(target_aud, event_type, idempotency_key)`. Same input gives the same
+    # `(target, event_type, idempotency_key)`. Same input gives the same
     # delivery_id, so a receiver can de-duplicate across emitter restarts.
-    def compute_delivery_id(target_aud, event_type, idempotency_key)
+    def compute_delivery_id(target, event_type, idempotency_key)
       return SecureRandom.uuid if idempotency_key.to_s.empty?
 
-      digest = Digest::SHA256.digest("#{target_aud}:#{event_type}:#{idempotency_key}")
+      digest = Digest::SHA256.digest("#{target}:#{event_type}:#{idempotency_key}")
       bytes = digest.bytes[0, 16]
       # Set version (5 — name-based SHA-1, closest analogue) + variant.
       bytes[6] = (bytes[6] & 0x0f) | 0x50

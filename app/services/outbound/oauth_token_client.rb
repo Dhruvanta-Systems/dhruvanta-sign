@@ -189,7 +189,7 @@ module Outbound
         verified_at: Time.now.utc.iso8601,
         failure_reason: nil,
         emitted_at: Time.now.utc.iso8601,
-        product_aud: audience,
+        audience: audience,
         cache_status: cache_status
       }
       @logger&.info("audit.oauth_token #{JSON.generate(event)}")

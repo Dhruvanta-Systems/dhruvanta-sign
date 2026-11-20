@@ -6,7 +6,7 @@ RSpec.describe WebhookOutbox do
   describe 'validations' do
     it 'rejects an unknown event_type' do
       row = described_class.new(
-        target_aud: WebhookOutbox::TARGET_DEFAULT,
+        target: WebhookOutbox::TARGET_DEFAULT,
         event_type: 'bogus_event',
         payload: '{}',
         delivery_id: SecureRandom.uuid,
@@ -19,7 +19,7 @@ RSpec.describe WebhookOutbox do
     it 'accepts the three locked event_types' do
       WebhookOutbox::EVENT_TYPES.each do |evt|
         row = described_class.new(
-          target_aud: WebhookOutbox::TARGET_DEFAULT,
+          target: WebhookOutbox::TARGET_DEFAULT,
           event_type: evt,
           payload: '{}',
           delivery_id: SecureRandom.uuid,
@@ -32,14 +32,14 @@ RSpec.describe WebhookOutbox do
     it 'rejects duplicate delivery_id' do
       delivery_id = SecureRandom.uuid
       described_class.create!(
-        target_aud: WebhookOutbox::TARGET_DEFAULT,
+        target: WebhookOutbox::TARGET_DEFAULT,
         event_type: WebhookOutbox::EVENT_SUBMISSION_CREATED,
         payload: '{}',
         delivery_id: delivery_id,
         status: WebhookOutbox::STATUS_PENDING
       )
       duplicate = described_class.new(
-        target_aud: WebhookOutbox::TARGET_DEFAULT,
+        target: WebhookOutbox::TARGET_DEFAULT,
         event_type: WebhookOutbox::EVENT_SUBMITTER_SIGNED,
         payload: '{}',
         delivery_id: delivery_id,
@@ -53,7 +53,7 @@ RSpec.describe WebhookOutbox do
   describe 'status helpers' do
     let(:row) do
       described_class.create!(
-        target_aud: WebhookOutbox::TARGET_DEFAULT,
+        target: WebhookOutbox::TARGET_DEFAULT,
         event_type: WebhookOutbox::EVENT_SUBMISSION_CREATED,
         payload: '{}',
         delivery_id: SecureRandom.uuid,

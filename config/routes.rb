@@ -24,7 +24,8 @@ Rails.application.routes.draw do
   end
 
   # Generic JWT single sign-on receiver (disabled until configured, see JwtSso::Config).
-  get  '/sso/handoff' => 'jwt_sso_handoff#show', as: :jwt_sso_handoff
+  get  '/sso/start' => 'jwt_sso_handoff#start', as: :jwt_sso_start
+  post '/sso/handoff' => 'jwt_sso_handoff#show', as: :jwt_sso_handoff
   post '/api/auth/sso-handoff' => 'jwt_sso_handoff#create', as: :api_jwt_sso_handoff
 
   # Audit-events export for service-to-service consumers. Auth is a service JWT,

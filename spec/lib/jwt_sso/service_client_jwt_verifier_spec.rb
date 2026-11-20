@@ -38,6 +38,7 @@ describe JwtSso::ServiceClientJwtVerifier do
       sub: 'svc-audit-reader',
       aud: expected_audience,
       scopes: required_scope,
+      account_id: 42,
       iat: now,
       exp: now + 60,
       jti: SecureRandom.uuid
@@ -65,6 +66,27 @@ describe JwtSso::ServiceClientJwtVerifier do
         expect(e.code).to eq('service-token-expired')
         expect(e.http_status).to eq(:unauthorized)
       }
+  end
+
+  it 'returns the account the token is limited to' do
+    expect(build_verifier.verify(mint).account_id).to eq(42)
+  end
+
+  it 'rejects a token without an account claim with service-token-no-account-scope' do
+    expect { build_verifier.verify(mint(account_id: nil)) }
+      .to raise_error(described_class::VerificationError) { |e|
+        expect(e.code).to eq('service-token-no-account-scope')
+        expect(e.http_status).to eq(:forbidden)
+      }
+  end
+
+  it 'rejects a wrong issuer when an issuer is configured' do
+    verifier = described_class.new(jwks_client: JwtSso::JwksClient.new(jwks_url: jwks_url, cache: @cache),
+                                   expected_audience: expected_audience, required_scope: required_scope,
+                                   expected_issuer: 'https://other.example.test')
+
+    expect { verifier.verify(mint) }
+      .to raise_error(described_class::VerificationError) { |e| expect(e.code).to eq('service-token-wrong-issuer') }
   end
 
   it 'rejects a wrong audience with service-token-wrong-aud' do

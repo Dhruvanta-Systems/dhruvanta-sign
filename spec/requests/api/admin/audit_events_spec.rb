@@ -44,6 +44,7 @@ describe 'API admin audit_events' do
       sub: 'svc-audit-reader',
       aud: expected_audience,
       scopes: required_scope,
+      account_id: account.id,
       iat: now,
       exp: now + 60,
       jti: SecureRandom.uuid
@@ -84,8 +85,8 @@ describe 'API admin audit_events' do
       expect(row['target_id_hash']).to be_present
       expect(row['target_id_hash'].length).to eq(64) # sha256 hex
       expect(row['request_id']).to be_nil
-      expect(row['product_aud']).to be_nil
-      expect(row['webhook_source']).to be_nil
+      expect(row['audience']).to be_nil
+      expect(row['source']).to be_nil
       expect(row['metadata']).to be_a(Hash)
     end
 
@@ -156,24 +157,59 @@ describe 'API admin audit_events' do
       expect(body['content'].first['event_code']).to eq('DOCUSEAL_VIEW_FORM')
     end
 
-    it 'filters by account_id when provided' do
-      submission_a = create(:submission, :with_submitters, template:, created_by_user: author)
-      account_b = create(:account)
-      author_b = create(:user, account: account_b)
-      folder_b = create(:template_folder, account: account_b, author: author_b)
-      template_b = create(:template, account: account_b, author: author_b, folder: folder_b)
-      submission_b = create(:submission, :with_submitters, template: template_b, created_by_user: author_b)
-      submitter_a = submission_a.submitters.first
-      submitter_b = submission_b.submitters.first
-      ev_a = create(:submission_event, submission: submission_a, submitter: submitter_a)
-      _ev_b = create(:submission_event, submission: submission_b, submitter: submitter_b)
+    context 'with a second account on the same server' do
+      let!(:account_b) { create(:account) }
+      let!(:author_b) { create(:user, account: account_b) }
+      let!(:template_b) do
+        create(:template, account: account_b, author: author_b,
+                          folder: create(:template_folder, account: account_b, author: author_b))
+      end
+      let!(:submission_a) { create(:submission, :with_submitters, template:, created_by_user: author) }
+      let!(:submission_b) { create(:submission, :with_submitters, template: template_b, created_by_user: author_b) }
+      let!(:event_a) { create(:submission_event, submission: submission_a, submitter: submission_a.submitters.first) }
+      let!(:event_b) { create(:submission_event, submission: submission_b, submitter: submission_b.submitters.first) }
 
-      token = mint
-      get '/api/admin/audit_events', params: { account_id: ev_a.account_id },
-                                     headers: auth_headers(token)
+      it 'returns only the events of the account named in the token' do
+        get '/api/admin/audit_events', headers: auth_headers(mint)
 
-      body = response.parsed_body
-      expect(body['totalElements']).to eq(1)
+        ids = response.parsed_body['content'].pluck('id')
+        expect(response.parsed_body['totalElements']).to eq(1)
+        expect(ids).to eq([event_a.id.to_s])
+        expect(ids).not_to include(event_b.id.to_s)
+      end
+
+      it 'follows a token for the other account to that account only' do
+        get '/api/admin/audit_events', headers: auth_headers(mint(account_id: account_b.id))
+
+        expect(response.parsed_body['content'].pluck('id')).to eq([event_b.id.to_s])
+      end
+
+      it 'refuses an account_id parameter that is not the token account' do
+        get '/api/admin/audit_events', params: { account_id: account_b.id }, headers: auth_headers(mint)
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body['code']).to eq('service-token-wrong-account')
+      end
+
+      it 'accepts an account_id parameter equal to the token account' do
+        get '/api/admin/audit_events', params: { account_id: account.id }, headers: auth_headers(mint)
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['totalElements']).to eq(1)
+      end
+
+      it 'refuses a token that names no account instead of reading every account' do
+        get '/api/admin/audit_events', headers: auth_headers(mint(account_id: nil))
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body['code']).to eq('service-token-no-account-scope')
+      end
+
+      it 'refuses a malformed account claim' do
+        get '/api/admin/audit_events', headers: auth_headers(mint(account_id: '1 OR 1=1'))
+
+        expect(response.parsed_body['code']).to eq('service-token-no-account-scope')
+      end
     end
   end
 end

@@ -5,6 +5,11 @@ require 'digest'
 # Read-only export of the local `submission_events` rows for audit aggregation by
 # another service (GET /api/admin/audit_events).
 #
+# The export is limited to ONE account: the token names it in its account claim
+# (SERVICE_JWT_ACCOUNT_CLAIM, default `account_id`) and a token without that claim
+# is refused. An `account_id` query parameter may only repeat the token's account;
+# any other value answers 403. The token's `audit.read` scope is the permission.
+#
 # Auth is a service JWT (not a Devise session), verified by
 # {JwtSso::ServiceClientJwtVerifier}: the audience and the audit scope are taken
 # from SERVICE_JWT_AUDIENCE and SERVICE_JWT_AUDIT_SCOPE. Failures render an
@@ -36,9 +41,8 @@ module Api
         page = [params[:page].to_i, 0].max
         size = bounded_size(params[:size])
 
-        scope = SubmissionEvent.all
+        scope = SubmissionEvent.where(account_id: permitted_account_id!)
         scope = filter_event_type(scope, params[:event_type])
-        scope = filter_account_id(scope, params[:account_id])
         scope = filter_start_date(scope, params[:start_date])
         scope = filter_end_date(scope, params[:end_date])
 
@@ -87,12 +91,18 @@ module Api
         scope.where(event_type: raw.to_s)
       end
 
-      def filter_account_id(scope, raw)
-        return scope if raw.blank?
+      # The one account this token may read. A query parameter naming another
+      # account is refused, not silently ignored, so a caller cannot believe it
+      # received another tenant's rows.
+      def permitted_account_id!
+        account_id = @verified.account_id
+        requested = params[:account_id]
 
-        # `submission_events` has an `account_id` column directly
-        # (added by 20251121090556_add_account_id_to_submission_events).
-        scope.where(account_id: raw.to_i)
+        if requested.present? && requested.to_s != account_id.to_s
+          raise JwtSso::ServiceClientJwtVerifier::VerificationError.new('service-token-wrong-account', :forbidden)
+        end
+
+        account_id
       end
 
       def filter_start_date(scope, raw)
@@ -133,8 +143,8 @@ module Api
           target_id_hash: submission_hash,
           request_id: nil,
           metadata: build_metadata(row),
-          product_aud: nil,
-          webhook_source: nil
+          audience: nil,
+          source: nil
         }
       end
 

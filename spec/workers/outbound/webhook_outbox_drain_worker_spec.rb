@@ -10,7 +10,7 @@ RSpec.describe Outbound::WebhookOutboxDrainWorker do
                attempts: 0,
                event_type: WebhookOutbox::EVENT_SUBMISSION_CREATED)
     WebhookOutbox.create!(
-      target_aud: WebhookOutbox::TARGET_DEFAULT,
+      target: WebhookOutbox::TARGET_DEFAULT,
       event_type: event_type,
       payload: '{"hello":"world"}',
       delivery_id: SecureRandom.uuid,

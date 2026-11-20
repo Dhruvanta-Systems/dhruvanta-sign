@@ -15,6 +15,8 @@ new account) on first sight.
 | `JWT_SSO_JWKS_URL` | URL of the issuer's JWKS. Required. |
 | `JWT_SSO_AUDIENCE` | Expected audience. Required. |
 | `JWT_SSO_ALGORITHM` | `ES256` (default), `ES384`, `RS256` or `RS384`. |
+| `JWT_SSO_LOGIN_URL` | Where `GET /sso/start` sends the browser. Gets `state` and `redirect_uri` query parameters. |
+| `JWT_SSO_CLAIM_NONCE` | Claim that must echo `state`, default `nonce`. |
 | `JWT_SSO_CLAIM_AUDIENCE` | Audience claim name, default `aud`. |
 | `JWT_SSO_CLAIM_EMAIL` | Email claim name, default `email`. |
 | `JWT_SSO_CLAIM_NAME` | Display name claim, default `name`. |
@@ -22,9 +24,21 @@ new account) on first sight.
 | `JWT_SSO_CLAIM_TIER` | Optional claim holding a plan or tier. |
 | `JWT_SSO_ALLOWED_TIERS` | Optional comma separated allow-list of tiers. |
 
-Endpoints: `GET /sso/handoff?token=<jwt>` (browser) and
-`POST /api/auth/sso-handoff` with `{"token": "<jwt>"}` (JSON). Until the three
-required variables are set both answer 404. The replay check on `jti` uses
+The flow is bound to the browser, and no token ever appears in a URL:
+
+1. The browser opens `GET /sso/start`. The app stores a random `state` in an
+   encrypted, HttpOnly, SameSite=Lax cookie and redirects to `JWT_SSO_LOGIN_URL`
+   with `state` and `redirect_uri` query parameters.
+2. The identity provider signs the person in and puts `state` into the token's
+   `nonce` claim, then auto-submits a form to `redirect_uri`
+   (`POST /sso/handoff`, fields `token` and `state`).
+3. The app checks that `state` equals the cookie and the token's nonce, consumes
+   the cookie, and signs the person in.
+
+`POST /api/auth/sso-handoff` with `{"token": "<jwt>", "state": "<state>"}`
+(JSON) applies the same checks. There is no GET handoff. Until the three
+required variables are set the handoff answers 404 and `/sso/start` needs
+`JWT_SSO_LOGIN_URL` as well. The replay check on `jti` uses
 `Rails.cache`; behind more than one app server it must be a shared store.
 
 ## Service JWT for the audit export
@@ -34,10 +48,18 @@ accepts a bearer JWT verified against `SERVICE_JWT_JWKS_URL`, with the audience
 `SERVICE_JWT_AUDIENCE` and the scope `SERVICE_JWT_AUDIT_SCOPE` (default
 `audit.read`). Unconfigured, it answers 503.
 
+The export is limited to one account. The token must carry that account's id in
+the claim named by `SERVICE_JWT_ACCOUNT_CLAIM` (default `account_id`); a token
+without it is refused with 403, and there is no token that reads every account.
+An `account_id` query parameter may only repeat the token's account. Set
+`SERVICE_JWT_ISSUER` to also require the `iss` claim.
+
 ## HTTP mail API
 
 With `MAIL_API_ENABLED=true`, a short list of transactional mails goes to an
-HTTP mail API instead of SMTP; all other mail still uses SMTP.
+HTTP mail API instead of SMTP; all other mail still uses SMTP. The routing headers (`X-Mailer-*`, `X-Docuseal-*`,
+`X-Template-Variables`) exist only for that API path and are removed from every
+mail that goes out over SMTP.
 
 | Variable | Meaning |
 | --- | --- |

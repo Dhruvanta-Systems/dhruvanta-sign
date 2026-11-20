@@ -7,6 +7,7 @@ class ApplicationMailer < ActionMailer::Base
   layout 'mailer'
 
   register_interceptor ActionMailerConfigsInterceptor
+  register_interceptor MailApiRoutingHeadersInterceptor
   register_interceptor HtmlToPlainTextInterceptor
   register_preview_interceptor HtmlToPlainTextInterceptor
 
@@ -37,7 +38,9 @@ class ApplicationMailer < ActionMailer::Base
   # whatever the mailer class; the delivery method is the gate. Concrete mailers
   # may call {#set_mail_api_template_variables} to add the account, user and
   # template variables. This hook only fills `X-Mailer-Class` and
-  # `X-Mailer-Action` and is idempotent.
+  # `X-Mailer-Action` and is idempotent. {MailApiRoutingHeadersInterceptor} removes
+  # these headers again from every mail that is not delivered through the HTTP
+  # mail API, so they never reach an SMTP server.
   def set_mail_api_routing_headers
     message['X-Mailer-Class']  = self.class.name
     message['X-Mailer-Action'] = action_name.to_s

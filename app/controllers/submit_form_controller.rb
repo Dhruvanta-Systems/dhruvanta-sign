@@ -65,7 +65,7 @@ class SubmitFormController < ApplicationController
       return render json: { error: I18n.t('form_has_been_completed_already') }, status: :unprocessable_content
     end
 
-    if @submitter.submission.template&.archived_at? || @submitter.submission.archived_at?
+    if form_archived?
       return render json: { error: I18n.t('form_has_been_archived') }, status: :unprocessable_content
     end
 
@@ -116,6 +116,11 @@ class SubmitFormController < ApplicationController
   end
 
   private
+
+  def form_archived?
+    @submitter.submission.template&.archived_at? || @submitter.submission.archived_at? ||
+      @submitter.account.archived_at?
+  end
 
   def maybe_render_not_found_for_search_bot
     return unless DetectBrowserDevice.search_bot?(request.user_agent)

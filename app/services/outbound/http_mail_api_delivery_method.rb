@@ -65,7 +65,7 @@ module Outbound
         send_via_mail_api(mail, decision)
       else
         emit_router_audit('FALLBACK', mail, reason: decision[:reason])
-        @smtp_fallback.deliver!(mail)
+        deliver_over_smtp(mail)
       end
     rescue Outbound::HttpMailApiClient::EmailDeliveryError => e
       # Fail-closed wire error — DO NOT silently retry through SMTP
@@ -81,10 +81,17 @@ module Outbound
         "reason=#{e.class.name}: #{e.message}"
       )
       emit_router_audit('FALLBACK', mail, reason: FALLBACK_REASON_INTERNAL_ERROR)
-      @smtp_fallback.deliver!(mail)
+      deliver_over_smtp(mail)
     end
 
     private
+
+    # Routing headers hold internal ids and the invitation's reset link; they are
+    # for this class only and must not go out in an SMTP message.
+    def deliver_over_smtp(mail)
+      MailApiRoutingHeadersInterceptor.strip!(mail)
+      @smtp_fallback.deliver!(mail)
+    end
 
     def decide(mail)
       return { route: :smtp, reason: FALLBACK_REASON_FLAG_OFF } unless flag_enabled?

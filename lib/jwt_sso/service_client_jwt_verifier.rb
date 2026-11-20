@@ -17,6 +17,10 @@ require 'openssl'
 #   SERVICE_JWT_JWKS_URL    JWKS of the token issuer (required)
 #   SERVICE_JWT_AUDIENCE    expected audience (required)
 #   SERVICE_JWT_AUDIT_SCOPE scope required by the audit endpoint (default "audit.read")
+#   SERVICE_JWT_ISSUER      expected `iss` claim; checked only when set
+#   SERVICE_JWT_ACCOUNT_CLAIM claim naming the one account the token may read
+#                           (default "account_id"). A token without it is refused:
+#                           there is no token that reads every account.
 module JwtSso
   class ServiceClientJwtVerifier
     class VerificationError < StandardError
@@ -31,7 +35,7 @@ module JwtSso
 
     MAX_CLOCK_SKEW = 30 # seconds
 
-    Verified = Struct.new(:audience, :scopes, :subject, :jti, :expires_at, keyword_init: true)
+    Verified = Struct.new(:audience, :scopes, :subject, :jti, :expires_at, :account_id, keyword_init: true)
 
     def self.default_audience
       ENV.fetch('SERVICE_JWT_AUDIENCE', '').strip
@@ -41,11 +45,23 @@ module JwtSso
       ENV.fetch('SERVICE_JWT_AUDIT_SCOPE', 'audit.read').strip
     end
 
+    def self.default_issuer
+      ENV.fetch('SERVICE_JWT_ISSUER', '').strip
+    end
+
+    def self.account_claim
+      value = ENV.fetch('SERVICE_JWT_ACCOUNT_CLAIM', '').strip
+      value.empty? ? 'account_id' : value
+    end
+
     def initialize(jwks_client: nil, expected_audience: self.class.default_audience,
-                   required_scope: self.class.default_audit_scope)
+                   required_scope: self.class.default_audit_scope, expected_issuer: self.class.default_issuer,
+                   account_claim: self.class.account_claim)
       @jwks_client = jwks_client || build_default_jwks_client
       @expected_audience = expected_audience
       @required_scope = required_scope
+      @expected_issuer = expected_issuer
+      @account_claim = account_claim
     end
 
     # Verify a bearer token and assert audience + scope.
@@ -70,8 +86,10 @@ module JwtSso
       decoded = decode_verified(token, jwk)
       claims = decoded[0]
 
+      validate_issuer!(claims)
       validate_audience!(claims)
       validate_scope!(claims)
+      account_id = extract_account_id!(claims)
       validate_exp!(claims)
       validate_iat!(claims)
 
@@ -80,7 +98,8 @@ module JwtSso
         scopes: extract_scopes(claims),
         subject: claims['sub'],
         jti: claims['jti'],
-        expires_at: Time.at(claims['exp']).utc
+        expires_at: Time.at(claims['exp']).utc,
+        account_id: account_id
       )
     end
 
@@ -119,6 +138,22 @@ module JwtSso
       raise VerificationError.new('service-token-wrong-alg', :unauthorized)
     rescue JWT::VerificationError, JWT::DecodeError
       raise VerificationError.new('service-token-signature-invalid', :unauthorized)
+    end
+
+    def validate_issuer!(claims)
+      return if blank?(@expected_issuer)
+      return if claims['iss'] == @expected_issuer
+
+      raise VerificationError.new('service-token-wrong-issuer', :unauthorized)
+    end
+
+    # The export is scoped to exactly one account, named by the token. A token
+    # that names none is refused rather than treated as "all accounts".
+    def extract_account_id!(claims)
+      raw = claims[@account_claim]
+      raise VerificationError.new('service-token-no-account-scope', :forbidden) unless raw.to_s.match?(/\A\d{1,18}\z/)
+
+      raw.to_s.to_i
     end
 
     def validate_audience!(claims)

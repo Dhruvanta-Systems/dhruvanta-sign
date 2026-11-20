@@ -7,6 +7,8 @@ class SubmitFormVideoKycController < ApplicationController
 
   def show
     submitter = Submitter.find_by!(slug: params[:submit_form_slug] || params[:slug])
+    return render_closed unless Submitters::FormState.open_for_signing?(submitter, current_user, request)
+
     result = PremiumBridge.video_kyc_status(submitter.slug)
 
     render json: result.presence || { status: 'not_started' }
@@ -14,6 +16,8 @@ class SubmitFormVideoKycController < ApplicationController
 
   def create
     submitter = Submitter.find_by!(slug: params[:submit_form_slug] || params[:slug])
+    return render_closed unless Submitters::FormState.open_for_signing?(submitter, current_user, request)
+
     config = EncryptedConfig.find_by(account: submitter.account, key: 'video_kyc_configs')&.value
 
     return render json: { error: 'Video KYC not configured' }, status: :unprocessable_content if config.blank?
@@ -47,6 +51,10 @@ class SubmitFormVideoKycController < ApplicationController
   end
 
   private
+
+  def render_closed
+    render json: { error: I18n.t('form_has_been_archived') }, status: :unprocessable_content
+  end
 
   def account_premium_feature?(account_id, feature)
     return false unless PremiumBridge.enabled?

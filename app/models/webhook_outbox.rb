@@ -5,7 +5,7 @@
 # Table name: webhook_outbox
 #
 #  id              :bigint           not null, primary key
-#  target_aud      :string(64)       not null
+#  target      :string(64)       not null
 #  event_type      :string(64)       not null
 #  payload         :text             not null
 #  delivery_id     :string(36)       not null
@@ -20,7 +20,7 @@
 #
 #  webhook_outbox_delivery_id_unique  (delivery_id) UNIQUE
 #  webhook_outbox_pending_idx         (status, last_attempt_at)
-#  webhook_outbox_target_aud_idx      (target_aud, created_at DESC)
+#  webhook_outbox_target_idx      (target, created_at DESC)
 #
 
 # Outbound webhook outbox row.
@@ -50,7 +50,7 @@ class WebhookOutbox < ApplicationRecord
     EVENT_SUBMITTER_SIGNED
   ].freeze
 
-  validates :target_aud, presence: true, length: { maximum: 64 }
+  validates :target, presence: true, length: { maximum: 64 }
   validates :event_type, presence: true,
                          length: { maximum: 64 },
                          inclusion: { in: EVENT_TYPES }

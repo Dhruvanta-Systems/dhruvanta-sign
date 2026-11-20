@@ -8,6 +8,7 @@ require 'rails_helper'
 describe JwtSso::HandoffService do
   let(:issuer) { 'https://idp.example.test' }
   let(:audience) { 'sign-app' }
+  let(:nonce) { 'browser-state-1' }
   let(:jwks_url) { 'http://localhost:8090/.well-known/jwks.json' }
 
   before(:all) do
@@ -42,6 +43,10 @@ describe JwtSso::HandoffService do
     @saved_env.each { |key, value| value.nil? ? ENV.delete(key) : ENV[key] = value }
   end
 
+  def verify(token)
+    build_service.verify_handoff(token, expected_nonce: nonce)
+  end
+
   def build_service
     described_class.new(
       jwks_client: JwtSso::JwksClient.new(jwks_url: jwks_url, cache: @memory_cache)
@@ -57,7 +62,7 @@ describe JwtSso::HandoffService do
     {
       iss: issuer, sub: SecureRandom.uuid, tenantId: SecureRandom.uuid, aud: audience,
       email: 'sso-user@example.com', email_verified: true, name: 'Ada Lovelace', tier: 'pro',
-      iat: now, exp: now + 30, jti: SecureRandom.uuid
+      iat: now, exp: now + 30, jti: SecureRandom.uuid, nonce: nonce
     }
   end
 
@@ -67,7 +72,7 @@ describe JwtSso::HandoffService do
 
   describe '#verify_handoff claim mapping' do
     it 'maps subject, tenant, email, name and tier onto the VerifiedHandoff struct' do
-      verified = build_service.verify_handoff(mint_token(sub: 'user-1', tenantId: 'tenant-1', tier: 'enterprise'))
+      verified = verify(mint_token(sub: 'user-1', tenantId: 'tenant-1', tier: 'enterprise'))
 
       expect(verified.subject).to eq('user-1')
       expect(verified.tenant_id).to eq('tenant-1')
@@ -77,7 +82,7 @@ describe JwtSso::HandoffService do
     end
 
     it 'accepts an audience array that contains the configured audience' do
-      verified = build_service.verify_handoff(mint_token(aud: ['other', audience]))
+      verified = verify(mint_token(aud: ['other', audience]))
 
       expect(verified.audience).to eq(['other', audience])
     end
@@ -85,7 +90,7 @@ describe JwtSso::HandoffService do
     it 'honours renamed claims' do
       ENV['JWT_SSO_CLAIM_EMAIL'] = 'mail'
       ENV['JWT_SSO_CLAIM_NAME'] = 'full_name'
-      verified = build_service.verify_handoff(mint_token(mail: 'renamed@example.com', full_name: 'Grace Hopper'))
+      verified = verify(mint_token(mail: 'renamed@example.com', full_name: 'Grace Hopper'))
 
       expect(verified.email).to eq('renamed@example.com')
       expect(verified.display_name).to eq('Grace Hopper')
@@ -98,10 +103,27 @@ describe JwtSso::HandoffService do
       ENV.delete('JWT_SSO_CLAIM_TENANT')
       ENV.delete('JWT_SSO_CLAIM_TIER')
 
-      verified = build_service.verify_handoff(mint_token)
+      verified = verify(mint_token)
 
       expect(verified.tenant_id).to be_nil
       expect(verified.tier).to be_nil
+    end
+  end
+
+  describe '#verify_handoff browser binding' do
+    it 'rejects a token whose nonce is not the browser state' do
+      expect { build_service.verify_handoff(mint_token, expected_nonce: 'other') }
+        .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-nonce-mismatch') }
+    end
+
+    it 'rejects a token with no nonce claim' do
+      expect { verify(mint_token(nonce: nil)) }
+        .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-nonce-mismatch') }
+    end
+
+    it 'refuses to verify at all without a browser state' do
+      expect { build_service.verify_handoff(mint_token, expected_nonce: '') }
+        .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-state-missing') }
     end
   end
 
@@ -111,11 +133,11 @@ describe JwtSso::HandoffService do
     after { ENV.delete('JWT_SSO_ALLOWED_TIERS') }
 
     it 'accepts a tier in the allow-list' do
-      expect(build_service.verify_handoff(mint_token(tier: 'enterprise')).tier).to eq('enterprise')
+      expect(verify(mint_token(tier: 'enterprise')).tier).to eq('enterprise')
     end
 
     it 'raises TierNotAllowedError on a tier outside the allow-list' do
-      expect { build_service.verify_handoff(mint_token(tier: 'free')) }
+      expect { verify(mint_token(tier: 'free')) }
         .to raise_error(JwtSso::HandoffService::TierNotAllowedError) { |e|
           expect(e.code).to eq('sso-handoff-tier-not-allowed')
           expect(e.http_status).to eq(:forbidden)
@@ -126,7 +148,7 @@ describe JwtSso::HandoffService do
     it 'raises TierNotAllowedError when the token carries no tier at all' do
       claims = base_claims.except(:tier)
 
-      expect { build_service.verify_handoff(encode(claims)) }
+      expect { verify(encode(claims)) }
         .to raise_error(JwtSso::HandoffService::TierNotAllowedError) { |e| expect(e.tier).to be_nil }
     end
   end
@@ -134,16 +156,16 @@ describe JwtSso::HandoffService do
   describe '#verify_handoff replay and lifetime' do
     it 'rejects the same token used twice' do
       token = mint_token
-      build_service.verify_handoff(token)
+      verify(token)
 
-      expect { build_service.verify_handoff(token) }
+      expect { verify(token) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-jti-replayed') }
     end
 
     it 'remembers the jti for the whole maximum lifetime plus clock skew' do
       allow(@memory_cache).to receive(:write).and_call_original
 
-      build_service.verify_handoff(mint_token)
+      verify(mint_token)
 
       expect(@memory_cache).to have_received(:write)
         .with(a_string_starting_with('sso_handoff_jti:'), anything, hash_including(expires_in: 330.seconds, unless_exist: true))
@@ -153,7 +175,7 @@ describe JwtSso::HandoffService do
       ENV['JWT_SSO_MAX_AGE_SECONDS'] = '60'
       allow(@memory_cache).to receive(:write).and_call_original
 
-      build_service.verify_handoff(mint_token)
+      verify(mint_token)
 
       expect(@memory_cache).to have_received(:write).with(anything, anything, hash_including(expires_in: 90.seconds))
     ensure
@@ -163,7 +185,7 @@ describe JwtSso::HandoffService do
     it 'rejects a token whose lifetime exceeds the maximum' do
       now = Time.now.utc.to_i
 
-      expect { build_service.verify_handoff(mint_token(iat: now, exp: now + 3600)) }
+      expect { verify(mint_token(iat: now, exp: now + 3600)) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-lifetime-too-long') }
     end
 
@@ -171,7 +193,7 @@ describe JwtSso::HandoffService do
       ENV['JWT_SSO_MAX_AGE_SECONDS'] = '86400'
       now = Time.now.utc.to_i
 
-      expect { build_service.verify_handoff(mint_token(iat: now, exp: now + 3600)) }
+      expect { verify(mint_token(iat: now, exp: now + 3600)) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-lifetime-too-long') }
     ensure
       ENV.delete('JWT_SSO_MAX_AGE_SECONDS')
@@ -180,12 +202,12 @@ describe JwtSso::HandoffService do
     it 'rejects a token issued longer ago than the maximum even if exp is still ahead' do
       now = Time.now.utc.to_i
 
-      expect { build_service.verify_handoff(mint_token(iat: now - 400, exp: now + 100)) }
+      expect { verify(mint_token(iat: now - 400, exp: now + 100)) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-too-old') }
     end
 
     it 'rejects a token without iat' do
-      expect { build_service.verify_handoff(encode(base_claims.except(:iat))) }
+      expect { verify(encode(base_claims.except(:iat))) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e| expect(e.code).to eq('sso-handoff-missing-iat') }
     end
 
@@ -194,7 +216,7 @@ describe JwtSso::HandoffService do
       service = described_class.new(jwks_client: JwtSso::JwksClient.new(jwks_url: jwks_url, cache: @memory_cache),
                                     cache: ActiveSupport::Cache::NullStore.new)
 
-      expect { service.verify_handoff(mint_token) }
+      expect { service.verify_handoff(mint_token, expected_nonce: nonce) }
         .to raise_error(JwtSso::HandoffService::HandoffError) { |e|
           expect(e.code).to eq('sso-handoff-replay-store-unavailable')
           expect(e.http_status).to eq(:service_unavailable)
@@ -206,7 +228,7 @@ describe JwtSso::HandoffService do
     it 'raises NotConfiguredError without fetching the JWKS' do
       ENV['JWT_SSO_ISSUER'] = ''
 
-      expect { build_service.verify_handoff(mint_token) }
+      expect { verify(mint_token) }
         .to raise_error(JwtSso::HandoffService::NotConfiguredError) { |e|
           expect(e.code).to eq('sso-handoff-not-configured')
           expect(e.http_status).to eq(:not_found)
@@ -219,13 +241,13 @@ describe JwtSso::HandoffService do
     let!(:existing) { create(:user, email: 'victim@example.com') }
 
     it 'links to an existing user by email when the token asserts a verified email' do
-      verified = build_service.verify_handoff(mint_token(email: 'victim@example.com', email_verified: true))
+      verified = verify(mint_token(email: 'victim@example.com', email_verified: true))
 
       expect(build_service.lookup_or_provision_user(verified)).to eq(existing)
     end
 
     it 'accepts the string "true" as a verified email' do
-      verified = build_service.verify_handoff(mint_token(email: 'victim@example.com', email_verified: 'true'))
+      verified = verify(mint_token(email: 'victim@example.com', email_verified: 'true'))
 
       expect(build_service.lookup_or_provision_user(verified)).to eq(existing)
     end
@@ -233,7 +255,7 @@ describe JwtSso::HandoffService do
     [false, nil, 'false', 'yes'].each do |value|
       it "never links to an existing user when email_verified is #{value.inspect}" do
         token = encode(base_claims.merge(email: 'victim@example.com', email_verified: value, sub: 'attacker-sub-1'))
-        verified = build_service.verify_handoff(token)
+        verified = verify(token)
 
         user = build_service.lookup_or_provision_user(verified)
 
@@ -246,7 +268,7 @@ describe JwtSso::HandoffService do
     it 'never links when the verified claim is absent' do
       token = encode(base_claims.except(:email_verified).merge(email: 'victim@example.com', sub: 'attacker-sub-2'))
 
-      user = build_service.lookup_or_provision_user(build_service.verify_handoff(token))
+      user = build_service.lookup_or_provision_user(verify(token))
 
       expect(user).not_to eq(existing)
     end
@@ -255,13 +277,13 @@ describe JwtSso::HandoffService do
       ENV['JWT_SSO_CLAIM_EMAIL_VERIFIED'] = 'mail_ok'
       token = encode(base_claims.except(:email_verified).merge(email: 'victim@example.com', mail_ok: true))
 
-      expect(build_service.lookup_or_provision_user(build_service.verify_handoff(token))).to eq(existing)
+      expect(build_service.lookup_or_provision_user(verify(token))).to eq(existing)
     ensure
       ENV.delete('JWT_SSO_CLAIM_EMAIL_VERIFIED')
     end
 
     it 'uses a synthetic non-routable address when the token has no email' do
-      verified = build_service.verify_handoff(mint_token(email: nil, email_verified: nil, sub: 'abcdef123456'))
+      verified = verify(mint_token(email: nil, email_verified: nil, sub: 'abcdef123456'))
 
       user = build_service.lookup_or_provision_user(verified)
 

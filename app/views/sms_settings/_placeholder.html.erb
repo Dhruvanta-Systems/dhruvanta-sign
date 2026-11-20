@@ -13,16 +13,17 @@
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">Account SID / Auth Key</span></label>
-      <input type="password" name="encrypted_config[value][account_sid]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['account_sid'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+      <%= render 'sms_settings/secret_field', name: 'account_sid', cfg: sms_config %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">Auth Token / Flow ID</span></label>
-      <input type="password" name="encrypted_config[value][auth_token]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['auth_token'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+      <%= render 'sms_settings/secret_field', name: 'auth_token', cfg: sms_config %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">From Number / Webhook URL</span></label>
       <input type="text" name="encrypted_config[value][from_number]" value="<%= sms_config.value.is_a?(Hash) ? sms_config.value['from_number'] : '' %>" class="base-input max-w-xs" autocomplete="off">
     </div>
+    <label class="flex items-center space-x-2 text-sm"><input type="checkbox" name="remove" value="1" class="checkbox checkbox-sm"><span>Remove the saved configuration</span></label>
     <button type="submit" class="base-button"><%= t('save') %></button>
   <% end %>
 </div>
@@ -41,16 +42,17 @@
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">API Key / Account SID</span></label>
-      <input type="password" name="encrypted_config[value][api_key]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['api_key'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+      <%= render 'sms_settings/secret_field', name: 'api_key', cfg: wa_config %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">Auth Token (Twilio only)</span></label>
-      <input type="password" name="encrypted_config[value][auth_token]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['auth_token'] : '' %>" class="base-input max-w-xs" autocomplete="off">
+      <%= render 'sms_settings/secret_field', name: 'auth_token', cfg: wa_config %>
     </div>
     <div class="form-control">
       <label class="label"><span class="label-text">Source Number / Webhook URL</span></label>
       <input type="text" name="encrypted_config[value][source_number]" value="<%= wa_config.value.is_a?(Hash) ? wa_config.value['source_number'] : '' %>" class="base-input max-w-xs" autocomplete="off">
     </div>
+    <label class="flex items-center space-x-2 text-sm"><input type="checkbox" name="remove" value="1" class="checkbox checkbox-sm"><span>Remove the saved configuration</span></label>
     <button type="submit" class="base-button">Save WhatsApp Configuration</button>
   <% end %>
 </div>

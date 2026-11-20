@@ -7,9 +7,19 @@ class SmsSettingsController < ApplicationController
 
   def index; end
 
+  # Credential fields are write-only: they are never rendered back into the form,
+  # and a blank submission keeps the value already saved.
+  SECRET_FIELDS = %w[account_sid auth_token api_key].freeze
+
   def create
-    @encrypted_config.assign_attributes(value: params.dig(:encrypted_config, :value)&.to_unsafe_h)
-    if @encrypted_config.value.values.all?(&:blank?)
+    submitted = params.dig(:encrypted_config, :value)&.to_unsafe_h || {}
+    stored = @encrypted_config.value.is_a?(Hash) ? @encrypted_config.value : {}
+    SECRET_FIELDS.each do |field|
+      submitted[field] = stored[field] if submitted[field].blank? && stored[field].present?
+    end
+    @encrypted_config.assign_attributes(value: submitted)
+
+    if params[:remove] == '1' || @encrypted_config.value.values.all?(&:blank?)
       @encrypted_config.destroy! if @encrypted_config.persisted?
     else
       @encrypted_config.save!

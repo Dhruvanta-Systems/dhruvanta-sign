@@ -6,6 +6,18 @@ class EmbedFormController < ActionController::Base
   def show
     @submitter = Submitter.find_by!(slug: params[:slug])
     @submission = @submitter.submission
+
+    # The embed is the signer page without its own 2FA or locked-state screens, so
+    # it applies the same rules as SubmitFormController#show and refuses instead of
+    # rendering: a closed link answers 410, a link the visitor may not use yet 403.
+    if (reason = Submitters::FormState.locked_reason(@submitter))
+      return render plain: "This form is not available (#{reason}).", status: :gone
+    end
+
+    unless Submitters::AuthorizedForForm.call(@submitter, nil, request, with_order: true)
+      return render plain: 'This form is not available.', status: :forbidden
+    end
+
     @attachments_index = ActiveStorage::Attachment.where(record: @submitter,
                                                          name: :attachments).preload(:blob).index_by(&:uuid)
     @form_configs = Submitters::FormConfigs.call(@submitter)
