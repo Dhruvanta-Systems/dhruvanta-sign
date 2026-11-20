@@ -30,6 +30,24 @@ jobs:
           gem install bundler-audit -v 0.9.3
           bundle-audit check --update
 
+  yarn_audit:
+    name: Yarn audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+      - name: Audit dependencies
+        # Fails on any high or critical advisory (the exit code only counts levels
+        # at or above --level). Fix a finding by upgrading or with a package.json
+        # resolution; there is no ignore list.
+        run: |
+          npm install -g yarn@1.22.22
+          yarn audit --level high
+
   rubocop:
     name: Rubocop
     runs-on: ubuntu-latest
