@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ProcessSubmitterCompletionJob, 'premium service notification' do
+RSpec.describe ProcessSubmitterCompletionJob, '#perform' do
   let(:account) { create(:account) }
   let(:user) { create(:user, account:) }
   let(:template) { create(:template, account:, author: user) }
@@ -15,7 +15,7 @@ RSpec.describe ProcessSubmitterCompletionJob, 'premium service notification' do
     allow(PremiumBridge).to receive(:notify)
   end
 
-  it 'sends form.completed and submission.completed for the last submitter' do
+  it 'notifies the premium service: form.completed and submission.completed for the last submitter' do
     described_class.new.perform('submitter_id' => submitter.id)
 
     expect(PremiumBridge).to have_received(:notify).with('form.completed', hash_including(submitter_id: submitter.id))
