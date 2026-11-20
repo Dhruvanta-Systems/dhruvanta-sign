@@ -5,12 +5,12 @@ RSpec.describe ProcessSubmitterCompletionJob, '#perform' do
   let(:user) { create(:user, account:) }
   let(:template) { create(:template, account:, author: user) }
   let(:submission) { create(:submission, template:, created_by_user: user) }
-  let(:submitter) { create(:submitter, submission:, uuid: SecureRandom.uuid, completed_at: Time.current) }
+  let!(:submitter) { create(:submitter, submission:, uuid: SecureRandom.uuid, completed_at: Time.current) }
 
   before do
     create(:encrypted_config, key: EncryptedConfig::ESIGN_CERTS_KEY,
                               value: GenerateCertificate.call.transform_values(&:to_pem))
-    Submissions.maybe_update_completed_at(submission)
+    Submissions.maybe_update_completed_at(submitter.submission)
     allow(PremiumBridge).to receive(:enabled?).and_return(true)
     allow(PremiumBridge).to receive(:notify)
   end
