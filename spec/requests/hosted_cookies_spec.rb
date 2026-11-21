@@ -10,6 +10,9 @@ describe 'Hosted cookies' do
     script = <<~RUBY
       session = ActionDispatch::Integration::Session.new(Rails.application)
       session.https!
+      plain = ActionDispatch::Integration::Session.new(Rails.application) # plain http, no https!
+      plain.get '/sso/start'
+      http_start = Array(plain.response.headers['set-cookie']).join("\\n")
       session.get '/sso/start'
       start = { status: session.response.status, cookies: Array(session.response.headers['set-cookie']).join("\\n"),
                 location: session.response.headers['location'] }
@@ -17,7 +20,7 @@ describe 'Hosted cookies' do
       home = { status: session.response.status, cookies: Array(session.response.headers['set-cookie']).join("\\n") }
       session.delete '/sso/sign_out'
       out = { status: session.response.status, location: session.response.headers['location'] }
-      puts "RESULT:" + JSON.generate(start:, home:, sign_out: out)
+      puts "RESULT:" + JSON.generate(start:, home:, sign_out: out, http_start:)
     RUBY
 
     run_in_hosted_process(script, extra_env)
@@ -36,6 +39,12 @@ describe 'Hosted cookies' do
     attributes = line.downcase.split(';').map(&:strip)
     expect(attributes).to include('secure', 'path=/', 'httponly', 'samesite=lax')
     expect(attributes.grep(/\Adomain=/)).to be_empty
+  end
+
+  it 'marks the state cookie Secure even when the app is reached over plain http (a proxy hides the scheme)' do
+    line = cookie_lines(result['http_start']).find { |c| c.start_with?('__Host-sso_state=') }
+
+    expect(line.downcase.split(';').map(&:strip)).to include('secure')
   end
 
   it 'sets no state cookie under the unprefixed name' do

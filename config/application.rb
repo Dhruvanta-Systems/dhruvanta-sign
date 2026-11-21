@@ -25,6 +25,12 @@ module DocuSeal
 
     config.autoload_lib(ignore: %w[assets tasks puma])
 
+    # Hosted mode: the __Host- cookies are Secure, and Rails would otherwise skip a
+    # Secure cookie when it cannot see TLS (a proxy that does not forward the scheme),
+    # which would drop the sign-in state silently. Write them regardless; a browser on
+    # plain http ignores a Secure cookie, so nothing is exposed.
+    config.action_dispatch.always_write_cookie = true if Extensions.hosted?
+
     config.active_storage.routes_prefix = ''
 
     config.active_storage.draw_routes = false
