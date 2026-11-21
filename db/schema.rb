@@ -390,9 +390,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
     t.bigint "submission_id", null: false
     t.bigint "submitter_id"
     t.datetime "updated_at", null: false
+    t.index ["account_id", "created_at"], name: "index_submission_events_on_account_created_at_start_kba", where: "((event_type)::text = 'start_kba'::text)"
     t.index ["account_id", "created_at"], name: "index_submissions_events_on_sms_event_types", where: "((event_type)::text = ANY (ARRAY[('send_sms'::character varying)::text, ('send_2fa_sms'::character varying)::text]))"
     t.index ["account_id"], name: "index_submission_events_on_account_id"
-    t.index ["account_id", "created_at"], name: "index_submission_events_on_account_created_at_start_kba", where: "((event_type)::text = 'start_kba'::text)"
     t.index ["created_at"], name: "index_submission_events_on_created_at"
     t.index ["submission_id"], name: "index_submission_events_on_submission_id"
     t.index ["submitter_id"], name: "index_submission_events_on_submitter_id"
@@ -645,7 +645,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
     t.index ["delivery_id"], name: "webhook_outbox_delivery_id_unique", unique: true
     t.index ["status", "last_attempt_at"], name: "webhook_outbox_pending_idx"
     t.index ["target", "created_at"], name: "webhook_outbox_target_idx", order: { created_at: :desc }
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying]::text[])", name: "webhook_outbox_status_chk"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'sent'::character varying::text, 'failed'::character varying::text])", name: "webhook_outbox_status_chk"
   end
 
   create_table "webhook_urls", force: :cascade do |t|
@@ -666,8 +666,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
   add_foreign_key "account_configs", "accounts"
   add_foreign_key "account_invitations", "accounts"
   add_foreign_key "account_invitations", "users", column: "invited_by_user_id"
-  add_foreign_key "account_linked_accounts", "accounts", column: "linked_account_id"
   add_foreign_key "account_linked_accounts", "accounts"
+  add_foreign_key "account_linked_accounts", "accounts", column: "linked_account_id"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "approval_steps", "submissions"

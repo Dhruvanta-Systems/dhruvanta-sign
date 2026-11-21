@@ -28,7 +28,7 @@ ActiveSupport.on_load(:active_storage_blob) do
 
   def self.proxy_url(blob, expires_at: nil, filename: nil, host: nil)
     Rails.application.routes.url_helpers.blobs_proxy_url(
-      signed_uuid: blob.signed_uuid(expires_at:), filename: filename || blob.filename,
+      signed_uuid: blob.signed_uuid(expires_at:), filename: FilenameUtils.url_filename(filename || blob.filename),
       **Docuseal.default_url_options,
       **{ host: }.compact
     )
@@ -36,7 +36,7 @@ ActiveSupport.on_load(:active_storage_blob) do
 
   def self.proxy_path(blob, expires_at: nil, filename: nil)
     Rails.application.routes.url_helpers.blobs_proxy_path(
-      signed_uuid: blob.signed_uuid(expires_at:), filename: filename || blob.filename
+      signed_uuid: blob.signed_uuid(expires_at:), filename: FilenameUtils.url_filename(filename || blob.filename)
     )
   end
 
@@ -58,6 +58,27 @@ ActiveSupport.on_load(:active_storage_blob) do
     service.delete(key)
   end
 end
+
+# /disk/:key/*filename URLs: in hosted mode the filename in the URL path is the ASCII
+# slug. The signed key still carries the real name in its Content-Disposition, so
+# the download keeps it (see FilenameUtils.url_filename).
+module HostedDiskUrlFilename
+  class Helpers < SimpleDelegator
+    def rails_disk_service_url(key, filename:, **)
+      __getobj__.rails_disk_service_url(key, filename: FilenameUtils.url_filename(filename), **)
+    end
+  end
+
+  private
+
+  def url_helpers
+    Helpers.new(super)
+  end
+end
+
+require 'active_storage/service/disk_service'
+
+ActiveStorage::Service::DiskService.prepend(HostedDiskUrlFilename)
 
 ActiveStorage::LogSubscriber.detach_from(:active_storage) if Rails.env.production?
 

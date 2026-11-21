@@ -187,6 +187,10 @@ is refused.
   and `redirect_uri` after the `#` of `JWT_SSO_LOGIN_URL`; `query` is the default
   elsewhere.
 - `JWT_SSO_SIGNED_OUT_URL` (https) is where sign-out sends the browser.
+- Download URLs: every `/file`, `/blobs_proxy` and `/disk` URL carries an ASCII slug as
+  its filename (lowercase `[a-z0-9._-]`, spaces to `-`, `file` when nothing is left),
+  so the path never needs a percent-escape. The real name stays in
+  `Content-Disposition` (`filename*`), so the person still downloads "My Contract.pdf".
 - A payment field: the builder offers it only when a `payment_step_provider` is
   configured, and in hosted mode a submission whose template carries one is refused
   (422 from the API) without one.
