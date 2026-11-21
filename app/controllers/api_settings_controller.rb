@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ApiSettingsController < ApplicationController
+  require_step_up :api_token, only: :create
+
   def index
     authorize!(:read, current_user.access_token)
   end

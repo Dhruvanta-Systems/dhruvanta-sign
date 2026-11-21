@@ -2,8 +2,8 @@
 
 require 'rails_helper'
 
-# Unit coverage for JwtSso::JwksClient: fetching, caching, kid-miss refetch and failure mapping.
-describe JwtSso::JwksClient do
+# Unit coverage for ServiceAuth::JwksClient: fetching, caching, kid-miss refetch and failure mapping.
+describe ServiceAuth::JwksClient do
   let(:url) { 'http://localhost:8090/.well-known/jwks.json' }
 
   before do
@@ -52,21 +52,21 @@ describe JwtSso::JwksClient do
     stub_request(:get, url).to_return(status: 503, body: 'down')
 
     client = described_class.new(jwks_url: url, cache: @cache)
-    expect { client.find_key(@kid) }.to raise_error(JwtSso::JwksClient::JwksUnreachable)
+    expect { client.find_key(@kid) }.to raise_error(ServiceAuth::JwksClient::JwksUnreachable)
   end
 
   it 'raises JwksUnreachable on a connection refused' do
     stub_request(:get, url).to_raise(Errno::ECONNREFUSED)
 
     client = described_class.new(jwks_url: url, cache: @cache)
-    expect { client.find_key(@kid) }.to raise_error(JwtSso::JwksClient::JwksUnreachable)
+    expect { client.find_key(@kid) }.to raise_error(ServiceAuth::JwksClient::JwksUnreachable)
   end
 
   it 'raises JwksMalformed on non-JSON response' do
     stub_request(:get, url).to_return(status: 200, body: 'not-json')
 
     client = described_class.new(jwks_url: url, cache: @cache)
-    expect { client.find_key(@kid) }.to raise_error(JwtSso::JwksClient::JwksMalformed)
+    expect { client.find_key(@kid) }.to raise_error(ServiceAuth::JwksClient::JwksMalformed)
   end
 
   it 'returns nil for blank kid without hitting the network' do

@@ -11,7 +11,7 @@ require 'digest'
 # any other value answers 403. The token's `audit.read` scope is the permission.
 #
 # Auth is a service JWT (not a Devise session), verified by
-# {JwtSso::ServiceClientJwtVerifier}: the audience and the audit scope are taken
+# {ServiceAuth::ServiceClientJwtVerifier}: the audience and the audit scope are taken
 # from SERVICE_JWT_AUDIENCE and SERVICE_JWT_AUDIT_SCOPE. Failures render an
 # `application/problem+json` body with a 401, 403 or 503.
 #
@@ -32,7 +32,7 @@ module Api
 
       before_action :verify_service_client_token!
 
-      rescue_from JwtSso::ServiceClientJwtVerifier::VerificationError do |error|
+      rescue_from ServiceAuth::ServiceClientJwtVerifier::VerificationError do |error|
         render json: problem_detail(error), status: error.http_status,
                content_type: 'application/problem+json'
       end
@@ -67,7 +67,7 @@ module Api
       end
 
       def service_client_verifier
-        @service_client_verifier ||= JwtSso::ServiceClientJwtVerifier.new
+        @service_client_verifier ||= ServiceAuth::ServiceClientJwtVerifier.new
       end
 
       def bearer_from_authorization
@@ -99,7 +99,7 @@ module Api
         requested = params[:account_id]
 
         if requested.present? && requested.to_s != account_id.to_s
-          raise JwtSso::ServiceClientJwtVerifier::VerificationError.new('service-token-wrong-account', :forbidden)
+          raise ServiceAuth::ServiceClientJwtVerifier::VerificationError.new('service-token-wrong-account', :forbidden)
         end
 
         account_id

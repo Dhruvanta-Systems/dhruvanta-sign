@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class WebhookSettingsController < ApplicationController
+  require_step_up :webhooks, only: %i[create update destroy]
   load_and_authorize_resource :webhook_url, parent: false, only: %i[index show new create update destroy]
   load_and_authorize_resource :webhook_url, only: %i[resend], id_param: :webhook_id
 

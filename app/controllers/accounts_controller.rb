@@ -13,6 +13,7 @@ class AccountsController < ApplicationController
   }.freeze
 
   before_action :load_account
+  require_step_up :account_deletion, only: :destroy
   authorize_resource :account
 
   def show; end

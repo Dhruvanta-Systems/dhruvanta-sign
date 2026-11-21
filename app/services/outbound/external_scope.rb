@@ -8,7 +8,7 @@ module Outbound
       account = submission&.account
       user = requester_for(submission)
 
-      JwtSso::ScopeStore.scope_for(account: account, user: user)
+      ExternalScopeStore.scope_for(account: account, user: user)
     end
 
     def requester_for(submission)

@@ -4,7 +4,7 @@ require 'jwt'
 require 'openssl'
 
 # Verifies bearer JWTs presented by other services (machine to machine), as
-# opposed to {JwtSso::HandoffService}, which signs a person in.
+# opposed to a person signing in (see Oidc).
 #
 # The token must be signed by a key in the JWKS at SERVICE_JWT_JWKS_URL, carry
 # the expected audience and include the required scope in its `scopes` (array) or
@@ -21,7 +21,7 @@ require 'openssl'
 #   SERVICE_JWT_ACCOUNT_CLAIM claim naming the one account the token may read
 #                           (default "account_id"). A token without it is refused:
 #                           there is no token that reads every account.
-module JwtSso
+module ServiceAuth
   class ServiceClientJwtVerifier
     class VerificationError < StandardError
       attr_reader :code, :http_status
@@ -110,7 +110,7 @@ module JwtSso
     end
 
     def build_default_jwks_client
-      JwtSso::JwksClient.new(jwks_url: ENV.fetch('SERVICE_JWT_JWKS_URL', '').strip)
+      ServiceAuth::JwksClient.new(jwks_url: ENV.fetch('SERVICE_JWT_JWKS_URL', '').strip)
     end
 
     def decode_unverified(token)
@@ -121,10 +121,10 @@ module JwtSso
 
     def lookup_jwk(kid)
       @jwks_client.find_key(kid)
-    rescue JwtSso::JwksClient::JwksUnreachable => e
+    rescue ServiceAuth::JwksClient::JwksUnreachable => e
       Rails.logger.warn("service-jwks-unreachable kid=#{kid} reason=#{e.message}")
       raise VerificationError.new('service-jwks-unreachable', :service_unavailable)
-    rescue JwtSso::JwksClient::JwksMalformed => e
+    rescue ServiceAuth::JwksClient::JwksMalformed => e
       Rails.logger.warn("service-jwks-malformed kid=#{kid} reason=#{e.message}")
       raise VerificationError.new('service-jwks-malformed', :service_unavailable)
     end

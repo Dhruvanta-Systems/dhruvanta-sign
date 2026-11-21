@@ -3,43 +3,90 @@
 Everything below is off until the listed environment variables are set. No
 service name, URL or credential is built in.
 
-## JWT single sign-on (`JwtSso`)
+## OpenID Connect sign-in (`AUTH_MODE=external`)
 
-An external identity provider signs a short-lived JWT; this app verifies it
-against the provider's JWKS, signs the person in and creates the user (inside a
-new account) on first sight.
+With `AUTH_MODE=external` the app is an OpenID Connect relying party for any
+standards-compliant provider. It is a confidential client using the authorization
+code flow with PKCE (`S256`), `state`, `nonce` and the RFC 9207 `iss` check. The
+protocol plumbing (discovery, the authorization and token requests, JWS
+verification) is the [`openid_connect`](https://github.com/nov/openid_connect) gem
+(MIT; with `rack-oauth2` and `json-jwt`, also MIT; released 2026-06, widely used).
 
 | Variable | Meaning |
 | --- | --- |
-| `JWT_SSO_ISSUER` | Expected `iss` claim. Required. |
-| `JWT_SSO_JWKS_URL` | URL of the issuer's JWKS. Required. |
-| `JWT_SSO_AUDIENCE` | Expected audience. Required. |
-| `JWT_SSO_ALGORITHM` | `ES256` (default), `ES384`, `RS256` or `RS384`. |
-| `JWT_SSO_LOGIN_URL` | Where `GET /sso/start` sends the browser. Gets `state` and `redirect_uri` query parameters. |
-| `JWT_SSO_CLAIM_NONCE` | Claim that must echo `state`, default `nonce`. |
-| `JWT_SSO_CLAIM_AUDIENCE` | Audience claim name, default `aud`. |
-| `JWT_SSO_CLAIM_EMAIL` | Email claim name, default `email`. |
-| `JWT_SSO_CLAIM_NAME` | Display name claim, default `name`. |
-| `JWT_SSO_CLAIM_TENANT` | Optional claim holding an external tenant id. |
-| `JWT_SSO_CLAIM_TIER` | Optional claim holding a plan or tier. |
-| `JWT_SSO_ALLOWED_TIERS` | Optional comma separated allow-list of tiers. |
+| `OIDC_ISSUER` | The issuer URL, exactly as published, e.g. `https://id.example.com`. Discovery is read from `<issuer>/.well-known/openid-configuration`. Required. |
+| `OIDC_CLIENT_ID` | This app's client id. Required. |
+| `OIDC_CLIENT_SECRET_FILE` | Path of a file holding the client secret. Required; the secret is never read from the environment. |
+| `OIDC_REDIRECT_URI` | The registered redirect URI, byte-exact. Default: this app's `/auth/oidc/callback`. |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | The registered post-logout URI. Default: this app's root. |
+| `OIDC_SCOPES` | Default `openid email profile`. `offline_access` is never requested: there are no refresh tokens. |
+| `OIDC_TOKEN_AUTH_METHOD` | `basic` (`client_secret_basic`, client id and secret URL-encoded before base64) or `post`. Default: basic, or post when the provider does not offer basic. |
+| `OIDC_ID_TOKEN_ALGS` | Accepted signature algorithms, default `ES256 ES384 RS256 PS256`. `none` and HMAC algorithms are never accepted. |
+| `OIDC_ALLOW_SIGNUP` | `false` refuses a person who has no user and no invitation. |
+| `OIDC_SESSION_MAX_AGE_SECONDS` | Longest a sign-in lasts, default 43200 (12 hours). |
+| `OIDC_MAX_ID_TOKEN_AGE_SECONDS` | Oldest an id_token may be on arrival, default 600. |
+| `OIDC_STEP_UP_ACR`, `OIDC_STEP_UP_ACR_ORDER`, `OIDC_STEP_UP_ACTIONS` | Step-up, see below. |
 
-The flow is bound to the browser, and no token ever appears in a URL:
+Register `<app>/auth/oidc/callback` as the redirect URI, the post-logout URI, and
+`<app>/auth/oidc/backchannel-logout` as the back-channel logout URI (with
+`backchannel_logout_session_required`).
 
-1. The browser opens `GET /sso/start`. The app stores a random `state` in an
-   encrypted, HttpOnly, SameSite=Lax cookie and redirects to `JWT_SSO_LOGIN_URL`
-   with `state` and `redirect_uri` query parameters.
-2. The identity provider signs the person in and puts `state` into the token's
-   `nonce` claim, then auto-submits a form to `redirect_uri`
-   (`POST /sso/handoff`, fields `token` and `state`).
-3. The app checks that `state` equals the cookie and the token's nonce, consumes
-   the cookie, and signs the person in.
+Routes: `GET /auth/oidc/start`, `GET /auth/oidc/callback`, `GET /auth/oidc/step_up`,
+`DELETE /auth/oidc/logout`, `POST /auth/oidc/backchannel-logout`.
 
-`POST /api/auth/sso-handoff` with `{"token": "<jwt>", "state": "<state>"}`
-(JSON) applies the same checks. There is no GET handoff. Until the three
-required variables are set the handoff answers 404 and `/sso/start` needs
-`JWT_SSO_LOGIN_URL` as well. The replay check on `jti` uses
-`Rails.cache`; behind more than one app server it must be a shared store.
+### The sign-in
+
+1. `GET /auth/oidc/start` stores a fresh `state`, `nonce` and PKCE verifier (each at
+   least 256 bits) in the encrypted browser session, never in a URL, and redirects to
+   the authorization endpoint. A `return_to` path (or the page that asked for
+   sign-in) is remembered; only a path on this app is ever followed.
+2. The callback checks `state` (then deletes it), checks `iss` when present
+   (RFC 9207; refused when absent and the provider says it always sends one), shows a
+   provider `error` such as `access_denied` as "not signed in", and exchanges the
+   code with the verifier.
+3. The id_token must be signed with an allowed algorithm by a key in the provider's
+   JWKS (`kid` selected; an unknown `kid` refetches the set at most 5 times a minute;
+   a `jku` is never followed) and carry the right `iss`, `aud` (with `azp` when there
+   are several), `exp`, `iat`, `nonce` and `sub`. **`email_verified` must be `true`.**
+4. The person is linked (below), `reset_session` runs, and a row in the server-side
+   session registry (`oidc_sessions`: provider `sid`, `auth_time`, `acr`, `amr`,
+   expiry) is created. The browser holds only a random token. The registry is checked
+   on every request; a revoked or expired row sends the person to sign in again.
+
+### Who is who: the subject, not the email
+
+A person is identified only by the provider's stable `(issuer, sub)`, stored on the
+user (`sso_issuer`, `sso_subject`, unique together). A user bound to the pair is that
+person whatever address the provider now reports; when it reports a new, free,
+verified address the user follows it. For an unseen `sub`, a pending invitation for
+the verified address joins the inviting account, once; otherwise a new account is
+created (unless `OIDC_ALLOW_SIGNUP=false`). An address that already belongs to a user
+is never handed to a different subject (a recycled or taken-over address): that
+sign-in is refused with 409.
+
+### Logout
+
+- **Sign-out here** (`DELETE /auth/oidc/logout`): the registry row is revoked, the
+  session is destroyed, and the browser is sent to the provider's
+  `end_session_endpoint` with `id_token_hint`, `post_logout_redirect_uri`,
+  `client_id` and `state`.
+- **Back-channel logout** (`POST /auth/oidc/backchannel-logout`, form field
+  `logout_token`): the token must be a `logout+jwt` with a valid signature, `iss`,
+  `aud`, `exp`/`iat`, the back-channel `events` claim and no `nonce`. Its `jti` is
+  accepted once, stored in the database table `oidc_logout_tokens` (shared by every
+  process). Every active registry row with that `sid` (or, when only `sub` is named,
+  that person) is revoked. Answers `200` with `Cache-Control: no-store`, or `400`.
+
+### Step-up
+
+Set `OIDC_STEP_UP_ACR` (the acr value to ask for), optionally `OIDC_STEP_UP_ACR_ORDER`
+(comma list, lowest first, so a stronger result also counts) and
+`OIDC_STEP_UP_ACTIONS` (comma list of `api_token`, `account_deletion`, `webhooks`,
+`role_change`). For a listed action the person is sent back to the provider with
+`acr_values=<OIDC_STEP_UP_ACR>`, `max_age=0` and a nonce that is an HMAC of the
+action and the session. The result unlocks that one action once, only when the
+`acr` is high enough, `auth_time` is not before the request, the nonce is the
+action's, and the same person answered.
 
 ## Service JWT for the audit export
 
@@ -90,7 +137,6 @@ upstream.
 
 | Port (short name) | Interface name | Methods |
 |---|---|---|
-| `auth` | `auth_provider` | `verify_handoff(token, expected_nonce:)`, `lookup_or_provision_user(handoff)`, `audit_received`, `audit_failed` |
 | `notifier` | `notifier` | `deliver(channel:, to:, subject:, html:, text:, template_key:, vars:, attachments:, ...)` |
 | `otp` | `otp_provider` | `send_code(subject:, purpose:, channel:, to:, locale:, account_id:)`, `verify(subject:, code:, purpose:)` |
 | `plan` | `plan_provider` | `account_plan(account_id)` returning `{ plan:, status:, features:, limits: { docs:, users:, templates:, sends: }, suspended: }` |
@@ -155,38 +201,17 @@ per-process counter.
 
 `AUTH_MODE=external` does not draw the local sign-in, password, reset, invitation,
 setup, two-factor or user-creation routes at all. People sign in only through the
-generic JWT handoff (`/sso/start`, `/sso/handoff`); an account is created on first
-sign-in.
-
-#### Who is who: the subject, not the email
-
-A person is identified by the provider's stable `(issuer, subject)`, stored on the
-user (`sso_issuer`, `sso_subject`, unique together); sign-in finds the user by that
-pair first. An email address is used only to link a user that has no identity yet
-(an older account) and to bind an invitation, and only when the provider asserts it
-is verified. If the verified address of a known person changes and is free, their
-user follows it. A user already bound to a different subject is never handed to a
-new person who arrives with the same address (a recycled or taken-over address):
-that sign-in is refused (`sso-handoff-email-bound`, 409). A token without a subject
-is refused.
+OpenID Connect provider (see above); an account is created on first sign-in.
 
 #### Receiver requirements for a hosted deployment
 
-- Cookies: with `HOSTED_MODE=true` the state cookie is `__Host-sso_state` and the
-  session cookie `__Host-sign_session`: Secure, `Path=/`, no `Domain`, HttpOnly,
-  `SameSite=Lax`.
-- Replay memory: the `jti` of an accepted token is kept in the Redis that Sidekiq
-  uses (shared by every process); if it cannot be reached the sign-in is refused
-  (503). Outside hosted mode the Rails cache is used.
-- An unknown `kid` refetches the key set at most 5 times a minute.
-- With `AUTH_MODE=external` a failed handoff shows a retry page and signed-out
-  visitors are sent to `/sso/start`; there is no local sign-in page.
-- A sign-in lasts at most `SSO_SESSION_MAX_AGE_SECONDS` (default 43200), then the
-  person goes through the handoff again.
-- `JWT_SSO_STATE_DELIVERY=fragment` (the default in hosted mode) delivers `state`
-  and `redirect_uri` after the `#` of `JWT_SSO_LOGIN_URL`; `query` is the default
-  elsewhere.
-- `JWT_SSO_SIGNED_OUT_URL` (https) is where sign-out sends the browser.
+- Cookies: with `HOSTED_MODE=true` the session cookie is `__Host-sign_session`:
+  Secure, `Path=/`, no `Domain`, HttpOnly, `SameSite=Lax`. Every request is treated
+  as https (`assume_ssl`) so the Secure cookie is always written behind a proxy.
+- The custom JWT handoff of earlier versions (`JWT_SSO_*`, `/sso/handoff`) is
+  removed; hosted mode refuses to boot while any `JWT_SSO_*` variable is set.
+- With `AUTH_MODE=external` a failed sign-in shows a retry page and signed-out
+  visitors are sent to `/auth/oidc/start`; there is no local sign-in page.
 - Download URLs: every `/file`, `/blobs_proxy` and `/disk` URL carries an ASCII slug as
   its filename (lowercase `[a-z0-9._-]`, spaces to `-`, `file` when nothing is left),
   so the path never needs a percent-escape. The real name stays in
@@ -199,18 +224,18 @@ is refused.
 
 An admin invites an email address with a role (admin, editor or viewer) from
 Settings > Users. There is no link and no token: when that email signs in through
-the identity provider and the handoff asserts a verified email
-(`JWT_SSO_CLAIM_EMAIL_VERIFIED`), the person is created in the inviting account with
+the OpenID Connect provider and the id_token asserts a verified email
+(`email_verified: true`), the person is created in the inviting account with
 the invited role. An invitation is used once and expires after
 `INVITATION_TTL_DAYS` (default 7); inviting the same address again replaces it. An
-unverified email never joins an account. The `users` plan limit applies when the
-person joins. A custom `auth_provider` should call `AccountInvitation.accept!` for
-a verified address before it creates a new account.
+unverified email never joins an account (the sign-in is refused). The `users` plan
+limit applies when the person joins.
 
 ### Hosted mode
 
-`HOSTED_MODE=true` refuses to boot unless the `auth`, `notifier`, `otp`, `plan` and
-`storage` ports are configured, no local auth route is drawn, SMTP is not
+`HOSTED_MODE=true` refuses to boot unless the `notifier`, `otp`, `plan` and
+`storage` ports are configured, OpenID Connect is configured and the client secret
+file is readable and not empty, no local auth route is drawn, SMTP is not
 configured and storage is not the local disk. In hosted mode every mail goes to
 the `notifier` (no allow-list, no SMTP fallback, attachments carried; a failure
 raises), signer one-time codes come from the `otp_provider` (the local code module

@@ -43,7 +43,7 @@ describe Extensions do
     it 'raises MissingPorts naming every port that is not configured' do
       described_class.register(:notifier, Fakes::Notifier.new)
 
-      expect { described_class.require!(:auth, :notifier, :otp, :plan, :storage) }
+      expect { described_class.require!(:notifier, :otp, :plan, :storage) }
         .to raise_error(described_class::MissingPorts) { |error| expect(error.ports).to include(:otp, :plan) }
     end
 

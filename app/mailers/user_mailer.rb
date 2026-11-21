@@ -44,7 +44,7 @@ class UserMailer < ApplicationMailer
                                     variables: { 'product_name' => Docuseal.product_name,
                                                  'account_name' => @current_account.name.to_s,
                                                  'role' => invitation.role,
-                                                 'cta_url' => jwt_sso_start_url })
+                                                 'cta_url' => oidc_start_url })
 
     I18n.with_locale(@current_account.locale) do
       mail(to: invitation.email,

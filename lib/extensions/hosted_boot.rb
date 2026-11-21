@@ -5,7 +5,10 @@ module Extensions
   # every capability that a hosted service must supply itself is in place and
   # every built-in that would bypass them is switched off:
   #
-  #   * the auth, notifier, otp, plan and storage ports are configured;
+  #   * the notifier, otp, plan and storage ports are configured;
+  #   * OpenID Connect sign-in is configured (OIDC_ISSUER, OIDC_CLIENT_ID,
+  #     OIDC_CLIENT_SECRET_FILE) and the client secret file is readable;
+  #   * the removed custom JWT handoff is not configured (JWT_SSO_* settings);
   #   * no local sign-in route is drawn (sessions, passwords, invitations, setup,
   #     two-factor setup, password reset) - set AUTH_MODE=external;
   #   * SMTP delivery is not configured (SMTP_ADDRESS) and mail goes to the notifier;
@@ -16,12 +19,12 @@ module Extensions
   module HostedBoot
     class Error < StandardError; end
 
-    REQUIRED_PORTS = %i[auth notifier otp plan storage].freeze
+    REQUIRED_PORTS = %i[notifier otp plan storage].freeze
 
     # Controllers that serve local sign-in, password, invitation, setup and
     # two-factor flows. A route to any of them is a local auth route.
     LOCAL_AUTH_CONTROLLERS = %w[
-      sessions passwords invitations setup mfa_setup users_send_reset_password
+      sessions passwords invitations setup mfa_setup users_send_reset_password jwt_sso_handoff
     ].freeze
 
     # Paths and actions of local auth that live inside a controller serving other things.
@@ -32,8 +35,9 @@ module Extensions
     # @param routes [Enumerable<#defaults>] the drawn routes
     # @param smtp_settings [Object] the Rails SMTP settings (config.action_mailer.smtp_settings)
     # @return [Array<String>] one sentence per violation
-    def violations(env:, routes:, delivery_method:, smtp_settings:, storage_name:, configured:)
-      list = []
+    def violations(env:, routes:, delivery_method:, smtp_settings:, storage_name:, configured:, oidc_enabled: true,
+                   oidc_secret_error: nil)
+      list = oidc_violations(env, oidc_enabled, oidc_secret_error)
 
       missing = REQUIRED_PORTS.reject { |port| configured.call(port) }
       list << "missing extensions: #{missing.join(', ')}" if missing.any?
@@ -48,6 +52,21 @@ module Extensions
       end
 
       list << 'storage is :disk; hosted mode needs an object store' if storage_name.to_s.in?(%w[disk local])
+
+      list
+    end
+
+    def oidc_violations(env, enabled, secret_error)
+      list = []
+
+      if !enabled
+        list << 'OpenID Connect is not configured (OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET_FILE)'
+      elsif secret_error
+        list << secret_error
+      end
+
+      removed = env.keys.grep(/\AJWT_SSO_/)
+      list << "the custom JWT handoff was removed; unset #{removed.first(3).join(', ')}" if removed.any?
 
       list
     end
@@ -70,6 +89,7 @@ module Extensions
         env: ENV, routes: app.routes.routes, delivery_method: ActionMailer::Base.delivery_method,
         smtp_settings: app.config.action_mailer.smtp_settings,
         storage_name: Extensions.storage_service_name,
+        oidc_enabled: Oidc::Config.enabled?, oidc_secret_error: (Oidc::Config.secret_file_error if Oidc::Config.enabled?),
         configured: ->(port) { Extensions.configured?(port) }
       )
 

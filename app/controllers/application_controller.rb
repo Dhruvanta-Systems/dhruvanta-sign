@@ -2,6 +2,7 @@
 
 class ApplicationController < ActionController::Base
   include SendRateLimited
+  include StepUpProtected
 
   BROWSER_LOCALE_REGEXP = /\A\w{2}(?:-\w{2})?/
 
@@ -14,7 +15,7 @@ class ApplicationController < ActionController::Base
   before_action :sign_in_for_demo, if: -> { Docuseal.demo? }
   before_action :maybe_redirect_to_setup, unless: :signed_in?
   before_action :authenticate_user!, unless: :devise_controller?
-  before_action :enforce_sso_session_lifetime, if: -> { Extensions.external_auth? && user_signed_in? }
+  before_action :enforce_oidc_session, if: -> { Extensions.external_auth? && user_signed_in? }
 
   before_action :set_csp, if: lambda {
     request.get? && !request.headers['HTTP_X_TURBO_REQUEST_ID'] && !turbo_infinite_scroll?
@@ -142,15 +143,15 @@ class ApplicationController < ActionController::Base
                                   email: "#{SecureRandom.hex}@docuseal.com", password: SecureRandom.hex))
   end
 
-  # A Rails session outlives the identity provider's own session (a revoked or
-  # disabled person is not signed out here), so a sign-in lasts at most
-  # SSO_SESSION_MAX_AGE_SECONDS and then goes through the handoff again.
-  def enforce_sso_session_lifetime
-    signed_in_at = current_user.current_sign_in_at
-    return if signed_in_at && signed_in_at > JwtSso::Config.session_max_age.seconds.ago
+  # With external sign-in a request is honoured only while its row in the session
+  # registry is active (not revoked by a sign-out or a back-channel logout, not past
+  # OIDC_SESSION_MAX_AGE_SECONDS); otherwise the person is sent to sign in again.
+  def enforce_oidc_session
+    registry = OidcSession.for_token(session[:oidc_session])
+    return if registry && registry.user_id == current_user.id
 
     sign_out(:user)
-    redirect_to jwt_sso_start_path
+    redirect_to oidc_start_path(return_to: (request.fullpath if request.get? || request.head?))
   end
 
   def current_account

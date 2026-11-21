@@ -15,17 +15,21 @@ Rails.application.routes.draw do
   get 'manifest' => 'pwa#manifest'
 
   # AUTH_MODE=external: there is no local sign-in at all. The sessions, passwords,
-  # invitation, setup, two-factor and password-reset routes below are NOT DRAWN (not
-  # redirected), and people only sign in through the JWT handoff further down.
-  # `new_user_session` and `destroy_user_session` are kept as names for the handoff's
-  # start and sign-out routes so that the rest of the app (and Devise's own
+  # invitation, setup, two-factor and password-reset routes are NOT DRAWN (not
+  # redirected), and people only sign in through the OpenID Connect provider (see
+  # Oidc). `new_user_session` and `destroy_user_session` are kept as names for the
+  # sign-in start and the sign-out so that the rest of the app (and Devise's own
   # "please sign in" redirect) keeps working without a local login page.
   external_auth = Extensions.external_auth?
 
   if external_auth
     devise_for :users, skip: :all
-    get '/sso/start' => 'jwt_sso_handoff#start', as: :new_user_session
-    delete '/sso/sign_out' => 'jwt_sso_handoff#destroy', as: :destroy_user_session
+    get '/auth/oidc/start' => 'oidc#start', as: :new_user_session
+    delete '/auth/oidc/logout' => 'oidc#destroy', as: :destroy_user_session
+    get '/auth/oidc/start' => 'oidc#start', as: :oidc_start
+    get '/auth/oidc/callback' => 'oidc#callback', as: :oidc_callback
+    get '/auth/oidc/step_up' => 'oidc#step_up', as: :oidc_step_up
+    post '/auth/oidc/backchannel-logout' => 'oidc#backchannel_logout', as: :oidc_backchannel_logout
   else
     devise_for :users, path: '/', only: %i[sessions passwords],
                        controllers: { sessions: 'sessions', passwords: 'passwords' }
@@ -36,11 +40,6 @@ Rails.application.routes.draw do
       end
     end
   end
-
-  # Generic JWT single sign-on receiver (disabled until configured, see JwtSso::Config).
-  get  '/sso/start' => 'jwt_sso_handoff#start', as: :jwt_sso_start
-  post '/sso/handoff' => 'jwt_sso_handoff#show', as: :jwt_sso_handoff
-  post '/api/auth/sso-handoff' => 'jwt_sso_handoff#create', as: :api_jwt_sso_handoff
 
   # Audit-events export for service-to-service consumers. Auth is a service JWT,
   # not a Devise session. See Api::Admin::AuditEventsController.

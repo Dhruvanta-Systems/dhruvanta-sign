@@ -4,7 +4,7 @@ require 'rails_helper'
 
 # A token with a made-up kid forces a refetch of the key set (a key rotation looks
 # the same). A flood of made-up kids must not become a flood of requests to the issuer.
-describe JwtSso::JwksClient do
+describe ServiceAuth::JwksClient do
   let(:url) { 'https://idp.example.test/jwks' }
   let(:client) { described_class.new(jwks_url: url, cache: ActiveSupport::Cache::MemoryStore.new) }
 

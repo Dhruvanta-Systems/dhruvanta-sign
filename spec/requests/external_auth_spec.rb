@@ -3,9 +3,10 @@
 require 'rails_helper'
 
 # AUTH_MODE=external: there is no local sign-in. The routes are not drawn (not
-# redirected) and people come in only through the JWT handoff, which provisions a
-# new account on first sign-in.
-describe 'External authentication' do
+# redirected) and people come in only through the OpenID Connect provider, which
+# provisions an account on first sign-in (see spec/requests/oidc_login_spec.rb for the
+# protocol itself).
+describe 'External authentication', :oidc do
   def routed_controllers
     Rails.application.routes.routes.map { |route| route.defaults[:controller].to_s }.uniq
   end
@@ -24,11 +25,15 @@ describe 'External authentication' do
       expect(routable?(:post, '/sign_in')).to be(true)
       expect(routable?(:get, '/setup')).to be(true)
     end
+
+    it 'draws no OpenID Connect route' do
+      expect(routed_controllers).not_to include('oidc')
+    end
   end
 
   describe 'with AUTH_MODE=external' do
     around do |example|
-      with_routes_for('AUTH_MODE' => 'external') { example.run }
+      with_routes_for(oidc_env('AUTH_MODE' => 'external')) { example.run }
     end
 
     it 'does not draw any local auth route' do
@@ -53,18 +58,23 @@ describe 'External authentication' do
       expect(routable?(:post, '/users')).to be(false)
     end
 
-    it 'keeps the handoff, the sign-in start and sign-out' do
-      expect(routable?(:get, '/sso/start')).to be(true)
-      expect(routable?(:post, '/sso/handoff')).to be(true)
-      expect(routable?(:delete, '/sso/sign_out')).to be(true)
+    it 'draws the OpenID Connect routes and none of the removed custom handoff' do
+      expect(routable?(:get, '/auth/oidc/start')).to be(true)
+      expect(routable?(:get, '/auth/oidc/callback')).to be(true)
+      expect(routable?(:post, '/auth/oidc/backchannel-logout')).to be(true)
+      expect(routable?(:delete, '/auth/oidc/logout')).to be(true)
+      expect(routable?(:get, '/sso/start')).to be(false)
+      expect(routable?(:post, '/sso/handoff')).to be(false)
+      expect(routable?(:post, '/api/auth/sso-handoff')).to be(false)
+      expect(routed_controllers).not_to include('jwt_sso_handoff')
     end
 
-    it 'sends a signed-out visitor to the handoff start, not to a local login page' do
+    it 'sends a signed-out visitor to the provider flow, not to a local login page' do
       create(:user)
 
       get '/settings/profile'
 
-      expect(response).to redirect_to('/sso/start')
+      expect(response).to redirect_to('/auth/oidc/start')
     end
 
     it 'does not redirect an empty install to a setup wizard' do
@@ -78,69 +88,21 @@ describe 'External authentication' do
         .to raise_error(ActionController::RoutingError)
     end
 
-    context 'with a configured identity provider' do
-      let(:auth) { Fakes::AuthProvider.new(email: 'first.signin@example.test') }
+    it 'provisions an account on first sign-in and signs the person in' do
+      expect(User.count).to eq(0)
 
-      before { Extensions.register(:auth, auth) }
+      oidc_sign_in
 
-      def start_flow
-        with_env('JWT_SSO_LOGIN_URL' => 'https://idp.example.test/login') do
-          get '/sso/start'
-          Rack::Utils.parse_query(URI.parse(response.location).query)['state']
-        end
-      end
+      expect(response).to redirect_to('/')
+      expect(Account.count).to eq(1)
 
-      it 'provisions an account on first sign-in and signs the person in' do
-        expect(User.count).to eq(0)
-        state = start_flow
-
-        post '/sso/handoff', params: { token: "token-for-#{state}", state: }
-
-        expect(response).to redirect_to('/')
-        expect(User.where(email: 'first.signin@example.test').count).to eq(1)
-        expect(Account.count).to eq(1)
-
-        get '/'
-
-        expect(response).to have_http_status(:ok)
-        expect(response.body).to include('Sign out')
-      end
-
-      it 'signs the same person into the same account the second time' do
-        2.times do
-          state = start_flow
-          post '/sso/handoff', params: { token: "token-for-#{state}", state: }
-          delete '/sso/sign_out'
-        end
-
-        expect(User.count).to eq(1)
-        expect(Account.count).to eq(1)
-      end
-
-      it 'signs out through the handoff controller' do
-        state = start_flow
-        post '/sso/handoff', params: { token: "token-for-#{state}", state: }
-
-        delete '/sso/sign_out'
-        get '/settings/profile'
-
-        expect(response).to redirect_to('/sso/start')
-      end
-
-      it 'shows a retry page, not a redirect loop, when the handoff fails' do
-        start_flow
-
-        post '/sso/handoff', params: { token: 'forged', state: 'nope' }
-
-        expect(response).to have_http_status(:unauthorized)
-        expect(response.body).to include('Sign-in failed')
-        expect(response.body).to include('/sso/start')
-      end
+      get '/'
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('Sign out')
     end
 
     it 'shows no local password or two-factor settings to a signed-in person' do
-      user = create(:user)
-      sign_in(user)
+      oidc_sign_in
 
       get settings_profile_index_path
 

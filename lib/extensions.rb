@@ -10,13 +10,10 @@
 #
 #   Extensions.register(:notifier, MyNotifier.new)   # in-process adapter
 #   Extensions.configured?(:notifier)                # => true
-#   Extensions.require!(:auth, :notifier)            # raises MissingPorts when absent
+#   Extensions.require!(:notifier, :plan)            # raises MissingPorts when absent
 #
 # Ports (short name => interface name) and what they answer:
 #
-#   auth          auth_provider          verify_handoff(token, expected_nonce:) -> handoff,
-#                                        lookup_or_provision_user(handoff) -> User,
-#                                        audit_received(...), audit_failed(...)
 #   notifier      notifier               deliver(channel:, to:, ...) (see Extensions::NotifierDeliveryMethod)
 #   otp           otp_provider           send_code(subject:, purpose:, channel:, to:, locale:, account_id:),
 #                                        verify(subject:, code:, purpose:) -> true/false
@@ -33,7 +30,8 @@
 # Environment:
 #
 #   HOSTED_MODE=true        fail-closed profile, see Extensions::HostedBoot
-#   AUTH_MODE=external      local sign-in routes are not drawn; sign-in only by the JWT handoff
+#   AUTH_MODE=external      local sign-in routes are not drawn; sign-in only through the OpenID
+#                           Connect provider (see Oidc::Config)
 #   EXTENSIONS_HTTP_PORTS   which ports the HTTP service (PREMIUM_SERVICE_URL) supplies,
 #                           default "plan,event_sink,verification"
 #   PLAN_CACHE_TTL_SECONDS  how long a plan answer is fresh (default 60)
@@ -42,7 +40,6 @@
 #   ABUSE_CONTROLS=true     per-account and per-IP rate limits outside hosted mode
 module Extensions
   PORTS = {
-    auth: :auth_provider,
     notifier: :notifier,
     otp: :otp_provider,
     plan: :plan_provider,
@@ -149,7 +146,6 @@ module Extensions
       key = normalize(name)
       return true if registered?(key)
       return true if http_port?(key)
-      return JwtSso::Config.enabled? if key == :auth
       return !storage_service_name.to_s.in?(%w[disk local]) if key == :storage
 
       false

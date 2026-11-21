@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class RevealAccessTokenController < ApplicationController
+  require_step_up :api_token, only: :create
+
   rate_limit to: 4, within: 1.minute, only: %i[create], by: -> { current_user.id }, with: lambda {
     Rollbar.error('Rate limit api key') if defined?(Rollbar)
 

@@ -12,13 +12,11 @@ describe AccountInvitation do
     described_class.invite!(account:, invited_by: admin, email:, role:)
   end
 
-  def handoff(email:, verified:)
-    JwtSso::HandoffService::VerifiedHandoff.new(jti: SecureRandom.uuid, subject: SecureRandom.uuid, email:,
-                                                email_verified: verified, display_name: 'New Person')
-  end
+  around { |example| with_env('OIDC_ISSUER' => 'https://op.example.com') { example.run } }
 
-  def provision(email:, verified: true)
-    JwtSso::HandoffService.new.lookup_or_provision_user(handoff(email:, verified:))
+  # A sign-in as the OpenID Connect client does it, after the id_token is verified.
+  def provision(email:)
+    Oidc::Linker.call({ 'sub' => SecureRandom.uuid, 'email' => email, 'email_verified' => true, 'name' => 'New Person' })
   end
 
   it 'stores the email in lower case with a role and an expiry' do
@@ -58,37 +56,6 @@ describe AccountInvitation do
       expect(user.email).to eq('new.person@example.test')
       expect(Account.count).to eq(1)
       expect(described_class.sole).to have_attributes(accepted_user_id: user.id).and(satisfy { |i| i.accepted_at.present? })
-    end
-
-    it 'does NOT join without a verified email: the person gets an account of their own' do
-      invite
-
-      user = provision(email: 'new.person@example.test', verified: false)
-
-      expect(user.account_id).not_to eq(account.id)
-      expect(described_class.sole.accepted_at).to be_nil
-    end
-
-    it 'does not join through an unverified claim of the invited address' do
-      invite
-
-      provision(email: 'new.person@example.test', verified: false)
-      user = provision(email: 'new.person@example.test', verified: true)
-
-      expect(user.account_id).to eq(account.id)
-    end
-
-    it 'never matches the synthetic address made for a token with no usable email' do
-      invitation = described_class.new(account:, email: 'sso-subject-1@sso-handoff.invalid', role: 'admin',
-                                       expires_at: 1.day.from_now)
-      invitation.save!(validate: false)
-      raw = JwtSso::HandoffService::VerifiedHandoff.new(jti: 'j', subject: 'subject-1', email: 'not-an-email',
-                                                        email_verified: true, display_name: 'X Y')
-
-      user = JwtSso::HandoffService.new.lookup_or_provision_user(raw)
-
-      expect(user.account_id).not_to eq(account.id)
-      expect(invitation.reload.accepted_at).to be_nil
     end
 
     it 'is single use' do
@@ -142,7 +109,7 @@ describe AccountInvitation do
     it 'does not move an existing user into the inviting account' do
       existing = create(:user, email: 'new.person@example.test')
 
-      provision(email: 'new.person@example.test')
+      expect { provision(email: 'new.person@example.test') }.to raise_error(Oidc::Error)
 
       expect(existing.reload.account_id).not_to eq(account.id)
     end

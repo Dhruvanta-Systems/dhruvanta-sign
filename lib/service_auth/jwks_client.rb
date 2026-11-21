@@ -7,25 +7,25 @@ require 'jwt'
 
 # Fetches and caches a JSON Web Key Set.
 #
-#   * The URL defaults to JWT_SSO_JWKS_URL (see {JwtSso::Config}).
+#   * The URL is passed in (the verifier uses SERVICE_JWT_JWKS_URL).
 #   * A successful fetch is cached in `Rails.cache` for five minutes.
 #   * A `kid` that is not in the cached set forces one refetch before it is
 #     reported absent, which handles a key rotation at the issuer.
 #   * Network failures and non-2xx responses raise {JwksUnreachable}; an invalid
 #     document raises {JwksMalformed}.
-module JwtSso
+module ServiceAuth
   class JwksClient
     class JwksError < StandardError; end
     class JwksUnreachable < JwksError; end
     class JwksMalformed < JwksError; end
 
-    CACHE_KEY_PREFIX = 'jwt_sso_jwks'
+    CACHE_KEY_PREFIX = 'service_auth_jwks'
     CACHE_TTL = 5.minutes
     REQUEST_TIMEOUT = 5
     MAX_FORCED_REFETCHES_PER_MINUTE = 5
 
     def initialize(jwks_url: nil, cache: Rails.cache, http: nil)
-      @jwks_url = jwks_url || JwtSso::Config.jwks_url
+      @jwks_url = jwks_url
       @cache = cache
       @http = http
     end
@@ -60,8 +60,8 @@ module JwtSso
 
     # Force a fresh HTTP fetch + cache write.
     #
-    # @raise [JwtSso::JwksClient::JwksUnreachable] on 5xx / network
-    # @raise [JwtSso::JwksClient::JwksMalformed] on JSON / JWKS parse
+    # @raise [ServiceAuth::JwksClient::JwksUnreachable] on 5xx / network
+    # @raise [ServiceAuth::JwksClient::JwksMalformed] on JSON / JWKS parse
     def force_refetch!
       raw = fetch_jwks_json
       jwks = parse_jwks(raw)

@@ -3,6 +3,7 @@
 class UsersController < ApplicationController
   load_and_authorize_resource :user, only: %i[index edit update destroy]
 
+  require_step_up :role_change, only: %i[update destroy]
   before_action :build_user, only: :create
   authorize_resource :user, only: :create
 

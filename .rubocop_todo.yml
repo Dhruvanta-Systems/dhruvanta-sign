@@ -82,10 +82,8 @@ Performance/StringInclude:
 # Offense count: 4
 RSpec/BeforeAfterAll:
   Exclude:
-    - 'spec/lib/jwt_sso/handoff_service_spec.rb'
-    - 'spec/lib/jwt_sso/service_client_jwt_verifier_spec.rb'
+    - 'spec/lib/service_auth/service_client_jwt_verifier_spec.rb'
     - 'spec/requests/api/admin/audit_events_spec.rb'
-    - 'spec/requests/jwt_sso_handoff_spec.rb'
 
 # Offense count: 2
 # Configuration parameters: IgnoredMetadata.
@@ -97,7 +95,7 @@ RSpec/DescribeClass:
 # Offense count: 1
 RSpec/DescribeMethod:
   Exclude:
-    - 'spec/lib/jwt_sso/service_client_jwt_verifier_spec.rb'
+    - 'spec/lib/service_auth/service_client_jwt_verifier_spec.rb'
 
 # Offense count: 7
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -105,18 +103,15 @@ RSpec/DescribeMethod:
 # SupportedStyles: method_call, block
 RSpec/ExpectChange:
   Exclude:
-    - 'spec/requests/jwt_sso_handoff_spec.rb'
     - 'spec/services/outbound/submission_creation_paths_spec.rb'
 
 # Offense count: 57
 # Configuration parameters: AssignmentOnly.
 RSpec/InstanceVariable:
   Exclude:
-    - 'spec/lib/jwt_sso/handoff_service_spec.rb'
-    - 'spec/lib/jwt_sso/jwks_client_spec.rb'
-    - 'spec/lib/jwt_sso/service_client_jwt_verifier_spec.rb'
+    - 'spec/lib/service_auth/jwks_client_spec.rb'
+    - 'spec/lib/service_auth/service_client_jwt_verifier_spec.rb'
     - 'spec/requests/api/admin/audit_events_spec.rb'
-    - 'spec/requests/jwt_sso_handoff_spec.rb'
     - 'spec/services/outbound/oauth_token_client_spec.rb'
 
 # Offense count: 1
@@ -134,7 +129,7 @@ RSpec/MessageSpies:
 # Offense count: 1
 RSpec/MultipleDescribes:
   Exclude:
-    - 'spec/lib/jwt_sso/service_client_jwt_verifier_spec.rb'
+    - 'spec/lib/service_auth/service_client_jwt_verifier_spec.rb'
 
 # Offense count: 1
 RSpec/StubbedMock:
@@ -156,7 +151,7 @@ RSpec/VerifiedDoubles:
 Rails/Blank:
   Exclude:
     - 'app/controllers/submit_form_voice_signature_controller.rb'
-    - 'lib/jwt_sso/jwks_client.rb'
+    - 'lib/service_auth/jwks_client.rb'
 
 # Offense count: 9
 # Configuration parameters: Database.
@@ -280,7 +275,7 @@ Style/IfUnlessModifier:
 Style/SafeNavigationChainLength:
   Exclude:
     - 'app/services/outbound/external_scope.rb'
-    - 'lib/jwt_sso/scope_store.rb'
+    - 'lib/external_scope_store.rb'
     - 'lib/submissions/create_from_spreadsheet.rb'
 
 # Offense count: 12

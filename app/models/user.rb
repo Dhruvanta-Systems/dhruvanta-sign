@@ -78,6 +78,7 @@ class User < ApplicationRecord
   belongs_to :account
   has_one :access_token, dependent: :destroy
   has_many :access_tokens, dependent: :destroy
+  has_many :oidc_sessions, dependent: :delete_all
   has_many :mcp_tokens, dependent: :destroy
   has_many :templates, dependent: :destroy, foreign_key: :author_id, inverse_of: :author
   has_many :template_folders, dependent: :destroy, foreign_key: :author_id, inverse_of: :author

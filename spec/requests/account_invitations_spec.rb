@@ -2,7 +2,7 @@
 
 require 'rails_helper'
 
-describe 'Teammate invitations with AUTH_MODE=external' do
+describe 'Teammate invitations with AUTH_MODE=external', :oidc do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account:) }
 
@@ -21,7 +21,7 @@ describe 'Teammate invitations with AUTH_MODE=external' do
   end
 
   context 'with external sign-in' do
-    around { |example| with_routes_for('AUTH_MODE' => 'external') { example.run } }
+    around { |example| with_routes_for(oidc_env('AUTH_MODE' => 'external')) { example.run } }
 
     it 'draws no password, reset or user-creation route, only invitations' do
       expect(routable?(:post, '/users')).to be(false)
@@ -34,7 +34,7 @@ describe 'Teammate invitations with AUTH_MODE=external' do
     end
 
     it 'lets an admin invite an email with a role and mails the invitee' do
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       allow(UserMailer).to receive(:account_invitation_email).and_call_original
 
@@ -54,12 +54,12 @@ describe 'Teammate invitations with AUTH_MODE=external' do
       mail = UserMailer.account_invitation_email(invitation)
 
       expect(mail.to).to eq(['mate@example.test'])
-      expect(mail.body.encoded).to include('/sso/start').and include('mate@example.test')
+      expect(mail.body.encoded).to include('/auth/oidc/start').and include('mate@example.test')
     end
 
     it 'shows the invite form and the pending list to an admin' do
       AccountInvitation.invite!(account:, email: 'pending@example.test', role: 'editor')
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       get new_account_invitation_path
       expect(response).to have_http_status(:ok)
@@ -71,7 +71,7 @@ describe 'Teammate invitations with AUTH_MODE=external' do
     end
 
     it 'refuses people who cannot manage users' do
-      sign_in(create(:user, account:, role: 'viewer'))
+      sign_in_via_oidc(create(:user, account:, role: 'viewer'))
 
       expect { post '/account_invitations', params: { account_invitation: { email: 'x@example.test', role: 'admin' } } }
         .not_to change(AccountInvitation, :count)
@@ -79,7 +79,7 @@ describe 'Teammate invitations with AUTH_MODE=external' do
 
     it 'does not invite into another account: a removal only touches the own account' do
       other = AccountInvitation.invite!(account: create(:account), email: 'other@example.test', role: 'editor')
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       expect { delete "/account_invitations/#{other.id}" }.to raise_error(ActiveRecord::RecordNotFound)
       expect(AccountInvitation.exists?(other.id)).to be(true)
@@ -87,13 +87,13 @@ describe 'Teammate invitations with AUTH_MODE=external' do
 
     it 'lets an admin withdraw an invitation' do
       invitation = AccountInvitation.invite!(account:, email: 'gone@example.test', role: 'editor')
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       expect { delete "/account_invitations/#{invitation.id}" }.to change(AccountInvitation, :count).by(-1)
     end
 
     it 'refuses a malformed email or role' do
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       expect { post '/account_invitations', params: { account_invitation: { email: 'nope', role: 'admin' } } }
         .not_to change(AccountInvitation, :count)
@@ -104,42 +104,21 @@ describe 'Teammate invitations with AUTH_MODE=external' do
     it 'refuses to invite when the plan has no room for another user' do
       Extensions.register(:plan, Fakes::PlanProvider.new(default: { plan: 'free', status: 'active', features: [],
                                                                     limits: { users: 1 } }))
-      sign_in(admin)
+      sign_in_via_oidc(admin)
 
       expect { post '/account_invitations', params: { account_invitation: { email: 'a@example.test', role: 'admin' } } }
         .not_to change(AccountInvitation, :count)
       expect(flash[:alert]).to match(/plan limit/i)
     end
 
-    context 'when the invited person signs in' do
-      def start_flow
-        with_env('JWT_SSO_LOGIN_URL' => 'https://idp.example.test/login') do
-          get '/sso/start'
-          Rack::Utils.parse_query(URI.parse(response.location).query)['state']
-        end
-      end
-
-      def sign_in_as(email, verified)
-        auth = Fakes::AuthProvider.new(email:)
-        handoff_class = Fakes::AuthProvider::Handoff
-        allow(auth).to receive(:verify_handoff).and_wrap_original do |original, *args, **kwargs|
-          original.call(*args, **kwargs).then { |h| handoff_class.new(**h.to_h, email_verified: verified) }
-        end
-        allow(auth).to receive(:lookup_or_provision_user) do |handoff|
-          JwtSso::HandoffService.new.lookup_or_provision_user(handoff)
-        end
-        Extensions.register(:auth, auth)
-        state = start_flow
-        post '/sso/handoff', params: { token: "token-for-#{state}", state: }
-      end
-
+    context 'when the invited person signs in', :oidc do
       it 'joins the inviting account with the invited role (verified email)' do
-        AccountInvitation.invite!(account:, email: 'mate@example.test', role: 'viewer')
+        AccountInvitation.invite!(account:, email: 'ada@example.com', role: 'viewer')
 
-        sign_in_as('mate@example.test', true)
+        oidc_sign_in
 
-        user = User.find_by!(email: 'mate@example.test')
-        expect(user).to have_attributes(account_id: account.id, role: 'viewer')
+        user = User.find_by!(email: 'ada@example.com')
+        expect(user).to have_attributes(account_id: account.id, role: 'viewer', sso_subject: fake_provider.subject)
         expect(Account.count).to eq(1)
 
         get '/'
@@ -147,12 +126,14 @@ describe 'Teammate invitations with AUTH_MODE=external' do
       end
 
       it 'does not join when the provider does not assert a verified email' do
-        AccountInvitation.invite!(account:, email: 'mate@example.test', role: 'viewer')
+        AccountInvitation.invite!(account:, email: 'ada@example.com', role: 'viewer')
+        fake_provider.claims = { email_verified: false }
 
-        sign_in_as('mate@example.test', false)
+        oidc_sign_in
 
+        expect(response).to have_http_status(:forbidden)
         expect(AccountInvitation.pending.count).to eq(1)
-        expect(User.find_by(email: 'mate@example.test')&.account_id).not_to eq(account.id)
+        expect(User.where(email: 'ada@example.com')).to be_empty
       end
     end
   end

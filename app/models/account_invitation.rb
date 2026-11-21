@@ -28,8 +28,8 @@
 #
 # An invitation to join an account, used with AUTH_MODE=external. There is no token
 # and no link to follow: the invitation is matched by email when that email signs in
-# through the identity provider AND the provider asserts the address is verified
-# (see JwtSso::HandoffService). It is used once and expires.
+# through the OpenID Connect provider (the id_token must assert a verified address)
+# (see Oidc::Linker). It is used once and expires.
 class AccountInvitation < ApplicationRecord
   DEFAULT_TTL_DAYS = 7
   ROLES = [User::ADMIN_ROLE, User::EDITOR_ROLE, User::VIEWER_ROLE].freeze

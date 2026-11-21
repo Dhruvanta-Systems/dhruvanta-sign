@@ -2,8 +2,8 @@
 
 require 'rails_helper'
 
-# Coverage for JwtSso::ServiceClientJwtVerifier: audience, scope, expiry and JWKS failure handling.
-describe JwtSso::ServiceClientJwtVerifier do
+# Coverage for ServiceAuth::ServiceClientJwtVerifier: audience, scope, expiry and JWKS failure handling.
+describe ServiceAuth::ServiceClientJwtVerifier do
   let(:jwks_url) { 'http://localhost:8081/.well-known/jwks.json' }
   let(:expected_audience) { 'audit.sign.example.test' }
   let(:required_scope) { 'audit.read' }
@@ -24,7 +24,7 @@ describe JwtSso::ServiceClientJwtVerifier do
   end
 
   def build_verifier
-    jwks = JwtSso::JwksClient.new(jwks_url: jwks_url, cache: @cache)
+    jwks = ServiceAuth::JwksClient.new(jwks_url: jwks_url, cache: @cache)
     described_class.new(jwks_client: jwks,
                         expected_audience: expected_audience,
                         required_scope: required_scope)
@@ -81,7 +81,7 @@ describe JwtSso::ServiceClientJwtVerifier do
   end
 
   it 'rejects a wrong issuer when an issuer is configured' do
-    verifier = described_class.new(jwks_client: JwtSso::JwksClient.new(jwks_url: jwks_url, cache: @cache),
+    verifier = described_class.new(jwks_client: ServiceAuth::JwksClient.new(jwks_url: jwks_url, cache: @cache),
                                    expected_audience: expected_audience, required_scope: required_scope,
                                    expected_issuer: 'https://other.example.test')
 
@@ -159,9 +159,9 @@ describe JwtSso::ServiceClientJwtVerifier do
   end
 end
 
-describe JwtSso::ServiceClientJwtVerifier, 'when not configured' do
+describe ServiceAuth::ServiceClientJwtVerifier, 'when not configured' do
   it 'answers 503 service-token-not-configured without any audience or scope' do
-    verifier = described_class.new(jwks_client: JwtSso::JwksClient.new(jwks_url: ''), expected_audience: '',
+    verifier = described_class.new(jwks_client: ServiceAuth::JwksClient.new(jwks_url: ''), expected_audience: '',
                                    required_scope: '')
 
     expect { verifier.verify('anything') }.to raise_error(described_class::VerificationError) { |e|

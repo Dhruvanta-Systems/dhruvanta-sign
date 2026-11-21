@@ -13,31 +13,6 @@ module Extensions
       end
     end
 
-    class Auth
-      # The generic JWT handoff receiver (see JwtSso::HandoffService).
-      def verify_handoff(token, expected_nonce:)
-        service.verify_handoff(token, expected_nonce:)
-      end
-
-      delegate :lookup_or_provision_user, to: :service
-
-      def audit_received(*, **)
-        service.audit_received(*, **)
-      end
-
-      def audit_failed(*, **)
-        service.audit_failed(*, **)
-      end
-
-      private
-
-      # A fresh service per call, as before the port existed (it holds no state
-      # between calls).
-      def service
-        JwtSso::HandoffService.new
-      end
-    end
-
     class Notifier
       def deliver(**)
         raise NotConfigured, 'no notifier is configured'
@@ -81,7 +56,7 @@ module Extensions
     end
 
     PROVIDERS = {
-      auth: Auth, notifier: Notifier, otp: OtpProvider, plan: Plan, storage: Storage,
+      notifier: Notifier, otp: OtpProvider, plan: Plan, storage: Storage,
       event_sink: EventSink, verification: Verification, payment_step: PaymentStep
     }.freeze
 

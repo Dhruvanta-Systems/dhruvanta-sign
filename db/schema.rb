@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_22_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gin"
   enable_extension "pg_catalog.plpgsql"
@@ -353,6 +353,34 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
     t.index ["uid"], name: "index_oauth_applications_on_uid", unique: true
   end
 
+  create_table "oidc_logout_tokens", force: :cascade do |t|
+    t.string "issuer", null: false
+    t.string "jti", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.index ["expires_at"], name: "index_oidc_logout_tokens_on_expires_at"
+    t.index ["issuer", "jti"], name: "index_oidc_logout_tokens_on_issuer_and_jti", unique: true
+  end
+
+  create_table "oidc_sessions", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "issuer", null: false
+    t.string "sub", null: false
+    t.string "sid"
+    t.string "token_digest", null: false
+    t.datetime "auth_time"
+    t.string "acr"
+    t.string "amr", default: [], null: false, array: true
+    t.datetime "expires_at", null: false
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["issuer", "sid"], name: "index_oidc_sessions_on_issuer_and_sid"
+    t.index ["issuer", "sub"], name: "index_oidc_sessions_on_issuer_and_sub"
+    t.index ["token_digest"], name: "index_oidc_sessions_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_oidc_sessions_on_user_id"
+  end
+
   create_table "otp_challenges", force: :cascade do |t|
     t.integer "attempts", default: 0, null: false
     t.datetime "created_at", null: false
@@ -687,6 +715,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
+  add_foreign_key "oidc_sessions", "users"
   add_foreign_key "submission_events", "accounts"
   add_foreign_key "submission_events", "submissions"
   add_foreign_key "submission_events", "submitters"
