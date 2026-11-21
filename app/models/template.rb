@@ -49,6 +49,12 @@ class Template < ApplicationRecord
 
   before_validation :maybe_set_default_folder, on: :create
 
+  # The plan gate for `templates`: checked before the row is written (also when an
+  # archived template is restored). A no-op unless a plan provider is configured.
+  before_save(if: -> { new_record? || (archived_at_changed? && archived_at.nil?) }) do
+    Extensions::Gate.check_resource!(account_id, :templates)
+  end
+
   after_create_commit { Extensions.emit('template.created', { account_id:, template_id: id }) }
 
   attribute :preferences, :string, default: -> { {} }

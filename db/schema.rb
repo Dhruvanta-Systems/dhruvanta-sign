@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_20_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gin"
   enable_extension "pg_catalog.plpgsql"
@@ -41,6 +41,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_120000) do
     t.text "value", null: false
     t.index ["account_id", "key"], name: "index_account_configs_on_account_id_and_key", unique: true
     t.index ["account_id"], name: "index_account_configs_on_account_id"
+  end
+
+  create_table "account_invitations", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "invited_by_user_id"
+    t.string "email", null: false
+    t.string "role", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "accepted_at"
+    t.bigint "accepted_user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_account_invitations_on_account_id"
+    t.index ["email"], name: "index_account_invitations_on_email_pending", unique: true, where: "(accepted_at IS NULL)"
+    t.index ["invited_by_user_id"], name: "index_account_invitations_on_invited_by_user_id"
   end
 
   create_table "account_linked_accounts", force: :cascade do |t|
@@ -646,6 +661,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_120000) do
   add_foreign_key "access_tokens", "users"
   add_foreign_key "account_accesses", "accounts"
   add_foreign_key "account_configs", "accounts"
+  add_foreign_key "account_invitations", "accounts"
+  add_foreign_key "account_invitations", "users", column: "invited_by_user_id"
   add_foreign_key "account_linked_accounts", "accounts", column: "linked_account_id"
   add_foreign_key "account_linked_accounts", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

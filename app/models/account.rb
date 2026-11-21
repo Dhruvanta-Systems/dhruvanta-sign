@@ -55,6 +55,7 @@ class Account < ApplicationRecord
   has_many :active_users, -> { active }, dependent: :destroy,
                                          inverse_of: :account, class_name: 'User'
   has_one :subscription, dependent: :destroy
+  has_many :account_invitations, dependent: :destroy
 
   has_one_attached :logo
 

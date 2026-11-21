@@ -60,6 +60,70 @@ describe Extensions::Gate do
       end
     end
 
+    describe 'the users limit' do
+      before { provider.set(account.id, plan(limits: { users: 2 })) }
+
+      it 'refuses a new user BEFORE it is written once the limit is reached' do
+        create(:user, account:)
+        create(:user, account:)
+
+        expect { create(:user, account:) }.to raise_error(Extensions::LimitExceeded, /users/)
+        expect(User.where(account_id: account.id).count).to eq(2)
+      end
+
+      it 'does not count archived users' do
+        create(:user, account:, archived_at: Time.current)
+        create(:user, account:)
+
+        expect { create(:user, account:) }.not_to raise_error
+      end
+
+      it 'refuses to bring an archived user back when there is no room' do
+        archived = create(:user, account:, archived_at: Time.current)
+        create_list(:user, 2, account:)
+
+        expect { archived.update!(archived_at: nil) }.to raise_error(Extensions::LimitExceeded)
+        expect(archived.reload.archived_at).to be_present
+      end
+
+      it 'still lets an existing user be edited at the limit' do
+        users = create_list(:user, 2, account:)
+
+        expect { users.first.update!(first_name: 'Changed') }.not_to raise_error
+      end
+
+      it 'does not touch other accounts' do
+        create_list(:user, 2, account:)
+
+        expect { create(:user, account: create(:account)) }.not_to raise_error
+      end
+    end
+
+    describe 'the templates limit' do
+      before { provider.set(account.id, plan(limits: { templates: 1 })) }
+
+      it 'refuses a new template BEFORE it is written once the limit is reached' do
+        create(:template, account:, author: user)
+
+        expect { create(:template, account:, author: user) }.to raise_error(Extensions::LimitExceeded, /templates/)
+        expect(Template.where(account_id: account.id).count).to eq(1)
+      end
+
+      it 'refuses to restore an archived template when there is no room' do
+        archived = create(:template, account:, author: user, archived_at: Time.current)
+        create(:template, account:, author: user)
+
+        expect { archived.update!(archived_at: nil) }.to raise_error(Extensions::LimitExceeded)
+      end
+
+      it 'suspends: a suspended account cannot create either' do
+        provider.set(account.id, plan(limits: { templates: 10, users: 10 }, suspended: true))
+
+        expect { create(:template, account:, author: user) }.to raise_error(Extensions::AccountSuspended)
+        expect { create(:user, account:) }.to raise_error(Extensions::AccountSuspended)
+      end
+    end
+
     describe 'the send quota' do
       before { provider.set(account.id, plan(limits: { sends: 2 })) }
 
@@ -190,10 +254,13 @@ describe Extensions::Gate do
     end
 
     it 'is on in hosted mode' do
-      with_env('ABUSE_CONTROLS' => nil, 'HOSTED_MODE' => 'true') do
-        3.times { described_class.rate_limit!(account:, ip: '10.0.0.1') }
+      use_test_redis!
 
-        expect { described_class.rate_limit!(account:, ip: '10.0.0.1') }.to raise_error(RateLimit::LimitApproached)
+      with_env('ABUSE_CONTROLS' => nil, 'HOSTED_MODE' => 'true') do
+        3.times { described_class.rate_limit!(account:, ip: "10.0.#{account.id}.1") }
+
+        expect { described_class.rate_limit!(account:, ip: "10.0.#{account.id}.1") }
+          .to raise_error(RateLimit::LimitApproached)
       end
     end
   end

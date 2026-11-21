@@ -10,8 +10,8 @@ module Extensions
   #
   # Quotas and the suspend switch come from the plan provider, so with no plan
   # provider nothing is limited. The rate limits are on in hosted mode (or with
-  # ABUSE_CONTROLS=true) and use the app's RateLimit store, which is per process:
-  # put a shared limit (a gateway or proxy) in front of several app servers.
+  # ABUSE_CONTROLS=true) and are shared by every app process through the Redis that
+  # Sidekiq uses (see RateLimit::Shared); in hosted mode a store that is down refuses.
   module Gate
     RATE_WINDOW = 10.minutes
     DEFAULT_ACCOUNT_LIMIT = 60
@@ -24,6 +24,15 @@ module Extensions
 
       ensure_usable!(account)
       raise_unless_within!(account, :docs, count)
+    end
+
+    # A new member or template is about to be created (or an archived one brought back).
+    # `key` is :users or :templates.
+    def check_resource!(account, key)
+      return unless Extensions.configured?(:plan)
+
+      ensure_usable!(account)
+      raise_unless_within!(account, key, 1)
     end
 
     def check_send!(account)
@@ -49,10 +58,10 @@ module Extensions
 
       account_id = account.respond_to?(:id) ? account.id : account
 
-      RateLimit.call("abuse-account-#{account_id}", limit: limit_from_env('RATE_LIMIT_ACCOUNT', DEFAULT_ACCOUNT_LIMIT),
-                                                    ttl: RATE_WINDOW, enabled: true)
-      RateLimit.call("abuse-ip-#{ip}", limit: limit_from_env('RATE_LIMIT_IP', DEFAULT_IP_LIMIT),
-                                       ttl: RATE_WINDOW, enabled: true)
+      RateLimit::Shared.call("abuse-account-#{account_id}",
+                             limit: limit_from_env('RATE_LIMIT_ACCOUNT', DEFAULT_ACCOUNT_LIMIT), ttl: RATE_WINDOW)
+      RateLimit::Shared.call("abuse-ip-#{ip}",
+                             limit: limit_from_env('RATE_LIMIT_IP', DEFAULT_IP_LIMIT), ttl: RATE_WINDOW)
     end
 
     def ensure_usable!(account)

@@ -134,7 +134,9 @@ When the provider fails, the last answer is used for up to `PLAN_MAX_STALE_SECON
 (default 3600); after that every gated action fails closed. Limits are checked
 before the cost is incurred: submissions (`docs`, per calendar month) when a
 submission is created, and `sends` (invitations, reminders, per calendar month)
-before a message goes out. A limit the plan does not name is unlimited. A plan
+before a message goes out. `users` and `templates` limits are checked before a user
+or a template is written, and also when an archived user or template is brought
+back; archived ones are not counted. A limit the plan does not name is unlimited. A plan
 with `suspended: true` (or status `suspended`) cannot create or send anything. The
 API answers 402 for a reached quota, 403 for a suspended account and 503 when the
 plan service is unavailable. There are no bundled plans or prices.
@@ -143,15 +145,30 @@ plan service is unavailable. There are no bundled plans or prices.
 
 `HOSTED_MODE=true` (or `ABUSE_CONTROLS=true`) limits creating submissions and
 sending, per account (`RATE_LIMIT_ACCOUNT`, default 60) and per IP address
-(`RATE_LIMIT_IP`, default 120) in a 10 minute window. The counters are per process:
-put a shared limit in front of several app servers.
+(`RATE_LIMIT_IP`, default 120) in a 10 minute fixed window. The counters live in
+the Redis that Sidekiq already uses (`REDIS_URL`), so the limit holds across every
+app process. If that Redis cannot be reached: in hosted mode the action is
+refused (503 from the API), fail closed; otherwise the app falls back to a
+per-process counter.
 
 ### External sign-in
 
 `AUTH_MODE=external` does not draw the local sign-in, password, reset, invitation,
-setup and two-factor routes at all. People sign in only through the generic JWT
-handoff (`/sso/start`, `/sso/handoff`); an account is created on first sign-in.
-Local users cannot be created or invited.
+setup, two-factor or user-creation routes at all. People sign in only through the
+generic JWT handoff (`/sso/start`, `/sso/handoff`); an account is created on first
+sign-in.
+
+#### Teammate invitations
+
+An admin invites an email address with a role (admin, editor or viewer) from
+Settings > Users. There is no link and no token: when that email signs in through
+the identity provider and the handoff asserts a verified email
+(`JWT_SSO_CLAIM_EMAIL_VERIFIED`), the person is created in the inviting account with
+the invited role. An invitation is used once and expires after
+`INVITATION_TTL_DAYS` (default 7); inviting the same address again replaces it. An
+unverified email never joins an account. The `users` plan limit applies when the
+person joins. A custom `auth_provider` should call `AccountInvitation.accept!` for
+a verified address before it creates a new account.
 
 ### Hosted mode
 

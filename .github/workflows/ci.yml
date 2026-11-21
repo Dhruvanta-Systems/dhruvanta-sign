@@ -184,6 +184,13 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Install packages
@@ -227,6 +234,8 @@ jobs:
           NODE_ENV: test
           COVERAGE: true
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/docuseal_test
+          # A real Redis for the specs that prove counters are shared across processes.
+          TEST_REDIS_URL: redis://redis:6379/0
         run: |
           bundle exec rake db:create
           bundle exec rake db:migrate

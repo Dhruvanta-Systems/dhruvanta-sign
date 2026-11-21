@@ -13,7 +13,12 @@
         <% end %>
       </h1>
       <% if params[:status].blank? %>
-        <% if can?(:create, User.new(account: current_account)) && !Extensions.external_auth? %>
+        <% if Extensions.external_auth? && can?(:create, User.new(account: current_account)) %>
+          <%= link_to new_account_invitation_path, class: 'shrink-0 md:order-3 btn btn-primary btn-md gap-2', title: 'Invite', data: { turbo_frame: 'modal' } do %>
+            <%= svg_icon('plus', class: 'w-6 h-6') %>
+            <span>Invite</span>
+          <% end %>
+        <% elsif can?(:create, User.new(account: current_account)) %>
           <% extra_buttons_html = render('users/extra_buttons') %>
           <% if content_for(:add_user_button) %>
             <%= content_for(:add_user_button) %>
@@ -40,6 +45,7 @@
         </div>
       <% end %>
     </div>
+    <%= render 'account_invitations/pending' if Extensions.external_auth? && params[:status].blank? && can?(:create, User.new(account: current_account)) %>
     <div class="<%= 'md:hidden' unless turbo_native_app? %> divide-y divide-base-300">
       <% @users.each do |user| %>
         <% can_edit = params[:status].blank? && can?(:update, user) && user.archived_at.blank? %>

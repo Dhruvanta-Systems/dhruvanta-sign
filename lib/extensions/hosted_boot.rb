@@ -25,7 +25,7 @@ module Extensions
     ].freeze
 
     # Paths and actions of local auth that live inside a controller serving other things.
-    LOCAL_AUTH_ACTIONS = { 'profile' => %w[update_password] }.freeze
+    LOCAL_AUTH_ACTIONS = { 'profile' => %w[update_password], 'users' => %w[new create] }.freeze
 
     module_function
 

@@ -1,0 +1,18 @@
+<%= render 'shared/turbo_modal', title: 'Invite a teammate' do %>
+  <%= form_with model: @invitation, url: account_invitations_path, html: { class: 'space-y-4' }, data: { turbo_frame: :_top } do |f| %>
+    <div class="form-control">
+      <%= f.label :email, t('email'), class: 'label' %>
+      <%= f.email_field :email, required: true, class: 'base-input', autocomplete: 'off' %>
+    </div>
+    <div class="form-control">
+      <%= f.label :role, class: 'label' %>
+      <%= f.select :role, AccountInvitation::ROLES.map { |r| [t(r), r] }, {}, class: 'base-select' %>
+    </div>
+    <p class="text-sm text-base-content/70">
+      They join this account when they sign in with this email address, once their address is verified. The invitation can be used once and expires.
+    </p>
+    <div class="form-control pt-2">
+      <%= f.button button_title(title: 'Send invitation'), class: 'base-button' %>
+    </div>
+  <% end %>
+<% end %>

@@ -71,6 +71,13 @@ module Extensions
   # show to a person.
   class GateError < StandardError; end
 
+  # Hosted mode only: the shared rate-limit store is down, so the action is refused.
+  class RateLimitUnavailable < GateError
+    def initialize(msg = 'Rate limiting is unavailable. Please try again later.')
+      super
+    end
+  end
+
   class AccountSuspended < GateError
     def initialize(msg = 'This account is suspended.')
       super

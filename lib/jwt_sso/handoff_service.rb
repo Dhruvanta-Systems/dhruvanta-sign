@@ -128,7 +128,7 @@ module JwtSso
       effective_display = handoff.display_name.presence || default_display(handoff.subject)
       first_name, last_name = split_display_name(effective_display)
 
-      user = User.find_by(email: effective_email)
+      user = User.find_by(email: effective_email) || join_invited_account(handoff, effective_email, first_name, last_name)
       if user
         persist_external_scope!(handoff, user)
         return user
@@ -155,6 +155,14 @@ module JwtSso
 
       persist_external_scope!(handoff, user)
       user
+    end
+
+    # A person invited to an account joins it, but only on an address the provider
+    # asserts is verified (the synthetic address never matches an invitation).
+    def join_invited_account(handoff, effective_email, first_name, last_name)
+      return unless handoff.email_verified && effective_email == handoff.email.to_s.downcase
+
+      AccountInvitation.accept!(email: effective_email, first_name:, last_name:)
     end
 
     def audit_received(handoff, user, ip:, user_agent:)

@@ -1,0 +1,7 @@
+<p><%= t('hi_there') %>,</p>
+<p><%= @invitation.account.name %> has invited you to join as <%= t(@invitation.role) %> on <%= Docuseal.product_name %>.</p>
+<p><%= link_to t('sign_in'), jwt_sso_start_url %></p>
+<p>Sign in with this email address (<%= @invitation.email %>) to join. The invitation can be used once and expires on <%= l(@invitation.expires_at, format: :long) %>.</p>
+<p>
+  <%= t('thanks') %>,<br><%= @current_account.name %>
+</p>

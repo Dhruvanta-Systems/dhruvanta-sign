@@ -29,6 +29,7 @@ describe 'Plan gate and abuse controls' do
 
   context 'with a plan provider' do
     before do
+      template # records created before the plan is in place
       Extensions.register(:plan, provider)
       provider.set(account.id, { plan: 'free', status: 'active', features: [], limits: { docs: 2 } })
     end

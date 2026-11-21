@@ -44,6 +44,18 @@ describe Extensions::HostedBoot do
     end
   end
 
+  %w[new create].each do |action|
+    it "reports a drawn local user #{action} route" do
+      found = violations(routes: good_routes + [route('users', action)])
+
+      expect(found.join).to include("users##{action}")
+    end
+  end
+
+  it 'does not mind the users routes that only edit or remove' do
+    expect(violations(routes: good_routes + [route('users', 'update'), route('users', 'destroy')])).to be_empty
+  end
+
   it 'reports the profile password change route' do
     found = violations(routes: good_routes + [route('profile', 'update_password')])
 

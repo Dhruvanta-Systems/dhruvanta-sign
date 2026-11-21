@@ -97,6 +97,8 @@ Rails.application.routes.draw do
       resource :send_reset_password, only: %i[update], controller: 'users_send_reset_password'
     end
   end
+  # Teammates join by invitation (matched by verified email at sign-in).
+  resources :account_invitations, only: %i[new create destroy] if external_auth
   resource :user_signature, only: %i[edit update destroy]
   resource :user_initials, only: %i[edit update destroy]
   resources :submissions_archived, only: %i[index], path: 'submissions/archived'

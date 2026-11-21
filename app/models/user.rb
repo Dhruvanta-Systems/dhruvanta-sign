@@ -90,6 +90,12 @@ class User < ApplicationRecord
   attribute :role, :string, default: ADMIN_ROLE
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
 
+  # The plan gate for `users`: checked before the row is written (also when an
+  # archived user is brought back). A no-op unless a plan provider is configured.
+  before_save(if: -> { new_record? || (archived_at_changed? && archived_at.nil?) }) do
+    Extensions::Gate.check_resource!(account_id, :users)
+  end
+
   after_create_commit { Extensions.emit('user.created', { account_id:, user_id: id }) }
 
   scope :active, -> { where(archived_at: nil) }

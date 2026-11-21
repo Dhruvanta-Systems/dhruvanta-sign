@@ -32,4 +32,23 @@ class UserMailer < ApplicationMailer
            subject: I18n.t('you_are_invited_to_product_name', product_name: Docuseal.product_name))
     end
   end
+
+  # Tells someone they were invited to an account used with AUTH_MODE=external. There
+  # is nothing to click through: they sign in with this address and join.
+  def account_invitation_email(invitation)
+    @invitation = invitation
+    @current_account = invitation.account
+
+    assign_message_metadata('account_invitation', invitation)
+    set_mail_api_template_variables(account_id: @current_account.id, user_id: invitation.invited_by_user_id,
+                                    variables: { 'product_name' => Docuseal.product_name,
+                                                 'account_name' => @current_account.name.to_s,
+                                                 'role' => invitation.role,
+                                                 'cta_url' => jwt_sso_start_url })
+
+    I18n.with_locale(@current_account.locale) do
+      mail(to: invitation.email,
+           subject: I18n.t('you_are_invited_to_product_name', product_name: Docuseal.product_name))
+    end
+  end
 end

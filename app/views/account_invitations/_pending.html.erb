@@ -1,0 +1,15 @@
+<% invitations = current_account.account_invitations.pending.order(:id) %>
+<% if invitations.any? %>
+  <div class="mb-6">
+    <p class="text-lg font-bold mb-2">Pending invitations</p>
+    <div class="divide-y divide-base-300">
+      <% invitations.each do |invitation| %>
+        <div class="flex items-center gap-3 py-3">
+          <span class="flex-1 min-w-0 truncate"><%= invitation.email %></span>
+          <span class="badge badge-info badge-outline badge-sm"><%= t(invitation.role) %></span>
+          <%= button_to t('remove'), account_invitation_path(invitation), method: :delete, class: 'link text-sm', data: { turbo_confirm: t('are_you_sure_') } %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>
