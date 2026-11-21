@@ -35,6 +35,15 @@ module Extensions
       raise_unless_within!(account, key, 1)
     end
 
+    # A submission about to be created must not carry a field the deployment cannot
+    # serve (a payment field without a payment_step_provider in hosted mode).
+    def check_fields!(fields)
+      return if Extensions.payment_field_available?
+      return unless Array(fields).any? { |field| field.is_a?(Hash) && field['type'] == 'payment' }
+
+      raise FeatureUnavailable, 'Payment fields are not available on this server.'
+    end
+
     def check_send!(account)
       return unless Extensions.configured?(:plan)
 

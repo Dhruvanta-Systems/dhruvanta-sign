@@ -76,7 +76,8 @@ describe Extensions::NotifierDeliveryMethod do
     end
 
     it 'sends a mail the HTTP mail API never routed (not whitelisted) to the notifier' do
-      submission = create(:submission, :with_submitters, template: create(:template, account: user.account, author: user),
+      template = create(:template, account: user.account, author: user, except_field_types: %w[payment])
+      submission = create(:submission, :with_submitters, template:,
                                                          created_by_user: user)
 
       SubmitterMailer.invitation_email(submission.submitters.first).deliver_now!

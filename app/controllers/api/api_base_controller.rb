@@ -22,7 +22,8 @@ module Api
 
     rescue_from Extensions::GateError do |e|
       status = { Extensions::LimitExceeded => :payment_required,
-                 Extensions::AccountSuspended => :forbidden }.fetch(e.class, :service_unavailable)
+                 Extensions::AccountSuspended => :forbidden,
+                 Extensions::FeatureUnavailable => :unprocessable_content }.fetch(e.class, :service_unavailable)
 
       render json: { error: e.message }, status:
     end

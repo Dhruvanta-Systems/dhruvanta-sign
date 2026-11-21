@@ -39,7 +39,7 @@ describe SignerOtp do
 
     it 'has the verification job ask the provider to send the code and send no local mail' do
       user = create(:user)
-      template = create(:template, account: user.account, author: user)
+      template = create(:template, account: user.account, author: user, except_field_types: %w[payment])
       submission = create(:submission, template:, created_by_user: user)
       submitter = create(:submitter, submission:, uuid: SecureRandom.uuid, email: 'signer@example.test')
       allow(SubmitterMailer).to receive(:otp_verification_email)

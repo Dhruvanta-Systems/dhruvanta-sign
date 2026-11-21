@@ -66,7 +66,7 @@ class AccountInvitation < ApplicationRecord
   # role and the invitation is used up, in one transaction. Returns the user, or
   # nil when there is no pending invitation. The row is locked so two sign-ins
   # cannot both use it.
-  def self.accept!(email:, first_name:, last_name:)
+  def self.accept!(email:, first_name:, last_name:, **identity)
     user = nil
 
     transaction do
@@ -74,7 +74,7 @@ class AccountInvitation < ApplicationRecord
 
       if invitation
         user = User.create!(account: invitation.account, email: invitation.email, first_name:, last_name:,
-                            password: SecureRandom.hex(32), role: invitation.role)
+                            password: SecureRandom.hex(32), role: invitation.role, **identity)
         invitation.update!(accepted_at: Time.current, accepted_user_id: user.id)
       end
     end

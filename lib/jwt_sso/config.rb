@@ -11,6 +11,14 @@ module JwtSso
   #   JWT_SSO_ALGORITHM      signature algorithm, ES256 (default), ES384, RS256 or RS384
   #   JWT_SSO_LOGIN_URL      where GET /sso/start sends the browser to sign in; it
   #                          receives `state` and `redirect_uri` query parameters
+  #   JWT_SSO_STATE_DELIVERY "fragment" puts `state` and `redirect_uri` after a `#` in
+  #                          the login URL (never sent to a server or logged), "query"
+  #                          puts them in the query string. Default: fragment in
+  #                          hosted mode, query otherwise.
+  #   JWT_SSO_SIGNED_OUT_URL where sign-out sends the browser (an https URL); default
+  #                          is this app's root page
+  #   SSO_SESSION_MAX_AGE_SECONDS  longest a sign-in lasts before the person is sent
+  #                          through the handoff again (default 43200, 12 hours)
   #   JWT_SSO_CLAIM_NONCE    claim that must echo `state` (default "nonce")
   #   JWT_SSO_CLAIM_AUDIENCE audience claim name (default "aud")
   #   JWT_SSO_CLAIM_EMAIL    email claim name (default "email")
@@ -42,6 +50,23 @@ module JwtSso
     end
 
     def login_url = env('JWT_SSO_LOGIN_URL')
+
+    def state_in_fragment?
+      value = env('JWT_SSO_STATE_DELIVERY').downcase
+      value.empty? ? Extensions.hosted? : value == 'fragment'
+    end
+
+    def signed_out_url
+      value = env('JWT_SSO_SIGNED_OUT_URL')
+      value.start_with?('https://') ? value : nil
+    end
+
+    DEFAULT_SESSION_MAX_AGE = 43_200
+
+    def session_max_age
+      value = env('SSO_SESSION_MAX_AGE_SECONDS', DEFAULT_SESSION_MAX_AGE.to_s).to_i
+      value.positive? ? value : DEFAULT_SESSION_MAX_AGE
+    end
 
     def nonce_claim = env('JWT_SSO_CLAIM_NONCE', 'nonce')
 

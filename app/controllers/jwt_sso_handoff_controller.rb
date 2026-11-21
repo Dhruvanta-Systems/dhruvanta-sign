@@ -34,6 +34,7 @@
 class JwtSsoHandoffController < ApplicationController
   skip_before_action :authenticate_user!
   skip_before_action :maybe_redirect_to_setup
+  skip_before_action :enforce_sso_session_lifetime
   skip_authorization_check
   # Sign-out is a normal session action and keeps CSRF protection.
   skip_forgery_protection only: %i[start show create]
@@ -42,7 +43,11 @@ class JwtSsoHandoffController < ApplicationController
     handle_handoff_error(error)
   end
 
+  # In hosted mode the cookies carry the __Host- prefix: the browser then only accepts
+  # them when they are Secure, have Path=/ and no Domain, so a sibling page on the
+  # same parent domain cannot plant (toss) one.
   STATE_COOKIE = :sso_state
+  HOST_STATE_COOKIE = :'__Host-sso_state'
   STATE_TTL = 10.minutes
 
   # GET /sso/start
@@ -50,8 +55,9 @@ class JwtSsoHandoffController < ApplicationController
     return head :not_found unless Extensions.configured?(:auth) && JwtSso::Config.login_url.present?
 
     state = SecureRandom.urlsafe_base64(32)
-    cookies.encrypted[STATE_COOKIE] = {
-      value: state, httponly: true, same_site: :lax, secure: request.ssl?, expires: STATE_TTL.from_now
+    cookies.encrypted[state_cookie_name] = {
+      value: state, httponly: true, same_site: :lax, secure: Extensions.hosted? || request.ssl?, path: '/',
+      expires: STATE_TTL.from_now
     }
 
     redirect_to sso_login_redirect_url(state), allow_other_host: true
@@ -81,24 +87,38 @@ class JwtSsoHandoffController < ApplicationController
   def destroy
     sign_out(:user)
 
+    # Hosted deployments send people to the identity front's "signed out" page.
+    return redirect_to(JwtSso::Config.signed_out_url, allow_other_host: true) if JwtSso::Config.signed_out_url
+
     redirect_to root_path
   end
 
   private
 
+  def state_cookie_name
+    Extensions.hosted? ? HOST_STATE_COOKIE : STATE_COOKIE
+  end
+
   def sso_login_redirect_url(state)
     uri = URI.parse(JwtSso::Config.login_url)
-    query = URI.decode_www_form(uri.query.to_s)
-    query << ['state', state] << ['redirect_uri', jwt_sso_handoff_url]
-    uri.query = URI.encode_www_form(query)
+    params = [['state', state], ['redirect_uri', jwt_sso_handoff_url]]
+
+    if JwtSso::Config.state_in_fragment?
+      # After the # nothing is sent to a server, written to an access log or put in a
+      # Referer header.
+      uri.fragment = URI.encode_www_form(params)
+    else
+      uri.query = URI.encode_www_form(URI.decode_www_form(uri.query.to_s) + params)
+    end
+
     uri.to_s
   end
 
   # Consumes the state cookie (single use) and returns it, or raises when the
   # browser did not start the flow or the posted state is not the cookie's.
   def consume_state!
-    expected = cookies.encrypted[STATE_COOKIE].to_s
-    cookies.delete(STATE_COOKIE)
+    expected = cookies.encrypted[state_cookie_name].to_s
+    cookies.delete(state_cookie_name, path: '/')
 
     posted = params[:state].to_s
     if expected.empty? || posted.empty? || !ActiveSupport::SecurityUtils.secure_compare(posted, expected)

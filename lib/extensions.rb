@@ -78,6 +78,9 @@ module Extensions
     end
   end
 
+  # A feature the deployment has no provider for (for example a payment field).
+  class FeatureUnavailable < GateError; end
+
   class AccountSuspended < GateError
     def initialize(msg = 'This account is suspended.')
       super
@@ -194,6 +197,14 @@ module Extensions
     rescue StandardError => e
       Rails.logger.warn("Extensions.emit #{event} failed: #{e.class}")
       nil
+    end
+
+    # ---- payment field -----------------------------------------------------------
+
+    # Hosted mode has no built-in payment step: a payment field in a form needs the
+    # payment_step_provider. (Outside hosted mode the stock behaviour is unchanged.)
+    def payment_field_available?
+      !hosted? || configured?(:payment_step)
     end
 
     # ---- storage ---------------------------------------------------------------

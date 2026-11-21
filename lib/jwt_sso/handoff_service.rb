@@ -111,58 +111,36 @@ module JwtSso
 
     # Finds the local user for the verified handoff or provisions one.
     #
-    # With a usable email claim that the token asserts is verified, the user is
-    # looked up (or created) by that address. Otherwise a synthetic, non-routable
-    # address derived from the subject is used, so the same person always maps to
-    # the same user and an unverified email can never take over another account.
+    # A person is identified by the provider's stable (issuer, subject), never by
+    # an email address:
+    #
+    #   1. a user already bound to this (issuer, subject) is that person - whatever
+    #      address they have now. If the provider reports a new verified address
+    #      that is free, the user's address follows it;
+    #   2. otherwise, only for an address the provider asserts is verified, a user
+    #      that has no identity yet (an older account) is bound to this subject, and
+    #      a pending invitation for the address joins the inviting account;
+    #   3. a user that is already bound to a DIFFERENT subject is never given to this
+    #      person: an address that was recycled (or taken over) cannot reach the old
+    #      account, and the sign-in is refused;
+    #   4. otherwise a new account is created. Without a verified address the user
+    #      gets a synthetic, non-routable address derived from the subject.
     #
     # @return [User]
     def lookup_or_provision_user(handoff)
-      effective_email =
-        if handoff.email_verified && handoff.email.present? && looks_like_email?(handoff.email)
-          handoff.email.downcase
-        else
-          "sso-#{handoff.subject}@sso-handoff.invalid"
-        end
+      raise HandoffError.new('sso-handoff-missing-sub', :unauthorized) if blank?(handoff.subject)
 
-      effective_display = handoff.display_name.presence || default_display(handoff.subject)
-      first_name, last_name = split_display_name(effective_display)
+      identity = { sso_issuer: JwtSso::Config.issuer, sso_subject: handoff.subject.to_s }
+      email = usable_verified_email(handoff)
 
-      user = User.find_by(email: effective_email) || join_invited_account(handoff, effective_email, first_name, last_name)
-      if user
-        persist_external_scope!(handoff, user)
-        return user
-      end
-
-      # The account and user are created in one transaction so a failed
-      # `User.create!` never leaves an orphan account behind.
-      user = ActiveRecord::Base.transaction do
-        account = Account.create!(
-          name: effective_display.presence || effective_email.split('@').first,
-          locale: 'en-US',
-          timezone: 'UTC'
-        )
-
-        User.create!(
-          account: account,
-          email: effective_email,
-          first_name: first_name,
-          last_name: last_name,
-          password: SecureRandom.hex(32),
-          role: User::ADMIN_ROLE
-        )
-      end
+      user = User.find_by(identity) || bind_or_join(handoff, identity, email) || provision_user(handoff, identity, email)
+      user = follow_email_change(user, email) if email
 
       persist_external_scope!(handoff, user)
       user
-    end
-
-    # A person invited to an account joins it, but only on an address the provider
-    # asserts is verified (the synthetic address never matches an invitation).
-    def join_invited_account(handoff, effective_email, first_name, last_name)
-      return unless handoff.email_verified && effective_email == handoff.email.to_s.downcase
-
-      AccountInvitation.accept!(email: effective_email, first_name:, last_name:)
+    rescue ActiveRecord::RecordNotUnique
+      # Two sign-ins of the same new person at once: the second finds the first's user.
+      User.find_by!(identity)
     end
 
     def audit_received(handoff, user, ip:, user_agent:)
@@ -187,6 +165,56 @@ module JwtSso
     end
 
     private
+
+    def usable_verified_email(handoff)
+      return unless handoff.email_verified && handoff.email.present? && looks_like_email?(handoff.email)
+
+      handoff.email.downcase
+    end
+
+    # Steps 2 and 3 above, for a person with no user bound to their subject yet.
+    def bind_or_join(handoff, identity, email)
+      return unless email
+
+      existing = User.find_by(email:)
+      if existing
+        raise HandoffError.new('sso-handoff-email-bound', :conflict) if existing.sso_subject.present?
+
+        existing.update!(identity)
+        return existing
+      end
+
+      first_name, last_name = split_display_name(display_name_for(handoff))
+      AccountInvitation.accept!(email:, first_name:, last_name:, **identity)
+    end
+
+    def provision_user(handoff, identity, email)
+      display = display_name_for(handoff)
+      first_name, last_name = split_display_name(display)
+      address = email || "sso-#{handoff.subject}@sso-handoff.invalid"
+
+      # The account and user are created in one transaction so a failed
+      # `User.create!` never leaves an orphan account behind.
+      ActiveRecord::Base.transaction do
+        account = Account.create!(name: display.presence || address.split('@').first, locale: 'en-US', timezone: 'UTC')
+
+        User.create!(account:, email: address, first_name:, last_name:, password: SecureRandom.hex(32),
+                     role: User::ADMIN_ROLE, **identity)
+      end
+    end
+
+    # The provider reported a new verified address for a known person: keep the
+    # user's address in step when it is free, so the old address can be given to
+    # someone else without reaching this account.
+    def follow_email_change(user, email)
+      user.update!(email:) if user.email != email && !User.exists?(email:)
+
+      user
+    end
+
+    def display_name_for(handoff)
+      handoff.display_name.presence || default_display(handoff.subject)
+    end
 
     def decode_unverified(token)
       JWT.decode(token, nil, false)
@@ -267,18 +295,13 @@ module JwtSso
       jti = claims['jti']
       raise HandoffError.new('sso-handoff-missing-jti', :unauthorized) if blank?(jti)
 
-      # `unless_exist: true` makes the write atomic, so a second use of the same
-      # jti inside the replay window is detected. The window outlives the token's
+      # The first use inside the replay window wins; the window outlives the token's
       # maximum validity, so replay is impossible while the token is still valid.
-      key = "sso_handoff_jti:#{jti}"
-      claimed = @cache.write(key, Time.now.utc.iso8601, expires_in: replay_ttl, unless_exist: true)
-      raise HandoffError.new('sso-handoff-jti-replayed', :conflict) unless claimed
-
-      # A cache that silently drops writes (the null store) would make replay
-      # protection a no-op, so refuse to continue.
-      raise HandoffError.new('sso-handoff-replay-store-unavailable', :service_unavailable) unless @cache.exist?(key)
+      raise HandoffError.new('sso-handoff-jti-replayed', :conflict) unless JwtSso::ReplayStore.claim?(jti, ttl: replay_ttl, cache: @cache)
 
       jti
+    rescue JwtSso::ReplayStore::Unavailable
+      raise HandoffError.new('sso-handoff-replay-store-unavailable', :service_unavailable)
     end
 
     # Only enforced when JWT_SSO_ALLOWED_TIERS is configured.

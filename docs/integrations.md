@@ -158,6 +158,39 @@ setup, two-factor or user-creation routes at all. People sign in only through th
 generic JWT handoff (`/sso/start`, `/sso/handoff`); an account is created on first
 sign-in.
 
+#### Who is who: the subject, not the email
+
+A person is identified by the provider's stable `(issuer, subject)`, stored on the
+user (`sso_issuer`, `sso_subject`, unique together); sign-in finds the user by that
+pair first. An email address is used only to link a user that has no identity yet
+(an older account) and to bind an invitation, and only when the provider asserts it
+is verified. If the verified address of a known person changes and is free, their
+user follows it. A user already bound to a different subject is never handed to a
+new person who arrives with the same address (a recycled or taken-over address):
+that sign-in is refused (`sso-handoff-email-bound`, 409). A token without a subject
+is refused.
+
+#### Receiver requirements for a hosted deployment
+
+- Cookies: with `HOSTED_MODE=true` the state cookie is `__Host-sso_state` and the
+  session cookie `__Host-sign_session`: Secure, `Path=/`, no `Domain`, HttpOnly,
+  `SameSite=Lax`.
+- Replay memory: the `jti` of an accepted token is kept in the Redis that Sidekiq
+  uses (shared by every process); if it cannot be reached the sign-in is refused
+  (503). Outside hosted mode the Rails cache is used.
+- An unknown `kid` refetches the key set at most 5 times a minute.
+- With `AUTH_MODE=external` a failed handoff shows a retry page and signed-out
+  visitors are sent to `/sso/start`; there is no local sign-in page.
+- A sign-in lasts at most `SSO_SESSION_MAX_AGE_SECONDS` (default 43200), then the
+  person goes through the handoff again.
+- `JWT_SSO_STATE_DELIVERY=fragment` (the default in hosted mode) delivers `state`
+  and `redirect_uri` after the `#` of `JWT_SSO_LOGIN_URL`; `query` is the default
+  elsewhere.
+- `JWT_SSO_SIGNED_OUT_URL` (https) is where sign-out sends the browser.
+- A payment field: the builder offers it only when a `payment_step_provider` is
+  configured, and in hosted mode a submission whose template carries one is refused
+  (422 from the API) without one.
+
 #### Teammate invitations
 
 An admin invites an email address with a role (admin, editor or viewer) from

@@ -22,6 +22,7 @@ module JwtSso
     CACHE_KEY_PREFIX = 'jwt_sso_jwks'
     CACHE_TTL = 5.minutes
     REQUEST_TIMEOUT = 5
+    MAX_FORCED_REFETCHES_PER_MINUTE = 5
 
     def initialize(jwks_url: nil, cache: Rails.cache, http: nil)
       @jwks_url = jwks_url || JwtSso::Config.jwks_url
@@ -42,6 +43,10 @@ module JwtSso
       jwks = current_jwks
       match = locate(jwks, kid)
       return match if match
+
+      # An unknown kid forces a refetch (a key rotation), but a flood of made-up
+      # kids must not turn into a flood of requests to the issuer.
+      return nil unless refetch_allowed?
 
       Rails.logger.info("jwks-cache-miss kid=#{kid} forcing refetch")
       jwks = force_refetch!
@@ -66,6 +71,13 @@ module JwtSso
     end
 
     private
+
+    def refetch_allowed?
+      RateLimit.call("jwks-refetch:#{@jwks_url}", limit: MAX_FORCED_REFETCHES_PER_MINUTE, ttl: 1.minute, enabled: true)
+    rescue RateLimit::LimitApproached
+      Rails.logger.warn('jwks-refetch-rate-limited')
+      false
+    end
 
     def current_jwks
       cached = @cache.read(cache_key)

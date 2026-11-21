@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_21_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gin"
   enable_extension "pg_catalog.plpgsql"
@@ -592,6 +592,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
     t.string "reset_password_token"
     t.string "role", null: false
     t.integer "sign_in_count", default: 0, null: false
+    t.string "sso_issuer"
+    t.string "sso_subject"
     t.string "unconfirmed_email"
     t.string "unlock_token"
     t.datetime "updated_at", null: false
@@ -599,6 +601,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
     t.index ["account_id"], name: "index_users_on_account_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
+    t.index ["sso_issuer", "sso_subject"], name: "index_users_on_sso_identity", unique: true, where: "(sso_subject IS NOT NULL)"
     t.index ["unlock_token"], name: "index_users_on_unlock_token", unique: true
     t.index ["uuid"], name: "index_users_on_uuid", unique: true
   end

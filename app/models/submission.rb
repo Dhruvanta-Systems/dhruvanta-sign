@@ -135,6 +135,7 @@ class Submission < ApplicationRecord
   # send) exists, whichever controller, API call, job or public link creates it.
   # A no-op unless a plan provider is configured. See Extensions::Gate.
   before_create { Extensions::Gate.check_create!(account_id) }
+  before_create { Extensions::Gate.check_fields!(template_fields || template&.fields) }
 
   after_create_commit { Extensions.emit('submission.created', { account_id:, submission_id: id }) }
 
