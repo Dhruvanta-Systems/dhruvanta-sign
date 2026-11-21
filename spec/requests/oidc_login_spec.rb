@@ -137,6 +137,18 @@ describe 'OpenID Connect sign-in', :oidc do
       expect(response).to have_http_status(:bad_request)
     end
 
+    it 'uses up the login attempt on a wrong state: the right callback afterwards is refused' do
+      path = oidc_authorize
+
+      get '/auth/oidc/callback', params: { code: 'whatever', state: 'wrong-state-wrong-state-wrong-state' }
+      expect(response).to have_http_status(:bad_request)
+
+      get path
+      expect(response).to have_http_status(:bad_request)
+      expect(response.body).to include('no login in progress')
+      expect(User.count).to eq(0)
+    end
+
     it 'refuses an iss that is not the issuer (RFC 9207)' do
       fake.iss_param = 'https://evil.example.net'
 
@@ -294,6 +306,13 @@ describe 'OpenID Connect sign-in', :oidc do
       fake.alg = 'HS256'
 
       expect_refused
+      expect(response.body).to include('invalid token alg')
+    end
+
+    it 'refuses HS256 even when the deployment lists it as allowed' do
+      fake.alg = 'HS256'
+
+      with_env('OIDC_ID_TOKEN_ALGS' => 'ES256 HS256 none') { expect_refused }
       expect(response.body).to include('invalid token alg')
     end
 
