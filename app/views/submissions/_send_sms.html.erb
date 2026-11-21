@@ -1,4 +1,4 @@
-<% unless turbo_native_app? %>
+<% unless turbo_native_app? || Extensions.hosted? %>
   <toggle-on-checked data-names="is_custom_message" class="block">
     <div class="form-control">
       <%= render 'sms_settings/placeholder' %>

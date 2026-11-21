@@ -1,13 +1,14 @@
 # frozen_string_literal: true
 
-# Read-only view of the plan the premium service has granted this account. Plans
-# are assigned by the server operator; there is nothing to buy or cancel here.
+# Read-only view of the plan the plan provider reports for this account: its name,
+# limits and how much of each is used. Nothing is priced or sold here; plans and
+# prices belong to the plan provider.
 class SubscriptionsController < ApplicationController
   before_action :authorize_subscriptions!
 
   def index
-    @current_plan_data = PremiumBridge.plan_for(current_account.id)
-    @current_plan = @current_plan_data['plan'].presence || 'free'
+    @plan = Extensions.plan_for(current_account)
+    @usage = @plan.limits.keys.index_with { |key| Extensions::Usage.count(current_account, key) }
   end
 
   private

@@ -4,6 +4,7 @@ module Api
   class ApiBaseController < ActionController::API
     include ActiveStorage::SetCurrent
     include Pagy::Method
+    include SendRateLimited
 
     DEFAULT_LIMIT = 10
     MAX_LIMIT = 100
@@ -17,6 +18,13 @@ module Api
 
     rescue_from Params::BaseValidator::InvalidParameterError do |e|
       render json: { error: e.message }, status: :unprocessable_content
+    end
+
+    rescue_from Extensions::GateError do |e|
+      status = { Extensions::LimitExceeded => :payment_required,
+                 Extensions::AccountSuspended => :forbidden }.fetch(e.class, :service_unavailable)
+
+      render json: { error: e.message }, status:
     end
 
     rescue_from RateLimit::LimitApproached do |e|

@@ -10,6 +10,8 @@ class SubmissionsController < ApplicationController
     authorize!(:create, Submission)
   end
 
+  before_action :enforce_send_rate_limit!, only: :create
+
   FIELD_ICONS = {
     'text' => 'text_size', 'signature' => 'writing_sign', 'date' => 'calendar_event',
     'number' => 'square_number_1', 'image' => 'photo', 'initials' => 'letter_case_upper',

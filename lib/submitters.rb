@@ -269,11 +269,24 @@ module Submitters
       raise BouncedEmail, I18n.t(:verification_email_bounced)
     end
 
-    TemplateMailer.otp_verification_email(submitter.submission.template, email: submitter.email).deliver_later!
+    deliver_shared_link_email_verification_code(submitter)
   rescue RateLimit::LimitApproached
     Rollbar.warning("Limit verification code for template: #{submitter.submission.template.id}") if defined?(Rollbar)
 
     raise UnableToSendCode, I18n.t('too_many_attempts')
+  end
+
+  def deliver_shared_link_email_verification_code(submitter)
+    template = submitter.submission.template
+
+    if SignerOtp.provider?
+      SignerOtp.send_code([submitter.email.downcase.squish, template.slug].join(':'), to: submitter.email,
+                                                                                      account_id: template.account_id)
+    else
+      TemplateMailer.otp_verification_email(template, email: submitter.email).deliver_later!
+    end
+  rescue Extensions::NotConfigured, PremiumBridge::Unavailable
+    raise UnableToSendCode, I18n.t(:unable_to_send_code, default: 'Unable to send the code. Please try again later.')
   end
 
   def email_bounced_recently?(email)
@@ -290,7 +303,7 @@ module Submitters
 
     link_2fa_key = [submitter.email.downcase.squish, submitter.submission.template.slug].join(':')
 
-    unless OtpChallenges.verify(otp.to_s.gsub(/\D/, ''), link_2fa_key, purpose: 'form_email_2fa')
+    unless SignerOtp.verify(otp.to_s.gsub(/\D/, ''), link_2fa_key)
       raise InvalidOtp, I18n.t(:invalid_code)
     end
 

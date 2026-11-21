@@ -35,7 +35,8 @@ class JwtSsoHandoffController < ApplicationController
   skip_before_action :authenticate_user!
   skip_before_action :maybe_redirect_to_setup
   skip_authorization_check
-  skip_forgery_protection
+  # Sign-out is a normal session action and keeps CSRF protection.
+  skip_forgery_protection only: %i[start show create]
 
   rescue_from JwtSso::HandoffService::HandoffError do |error|
     handle_handoff_error(error)
@@ -46,7 +47,7 @@ class JwtSsoHandoffController < ApplicationController
 
   # GET /sso/start
   def start
-    return head :not_found unless JwtSso::Config.enabled? && JwtSso::Config.login_url.present?
+    return head :not_found unless Extensions.configured?(:auth) && JwtSso::Config.login_url.present?
 
     state = SecureRandom.urlsafe_base64(32)
     cookies.encrypted[STATE_COOKIE] = {
@@ -74,6 +75,13 @@ class JwtSsoHandoffController < ApplicationController
       external_tenant_id: verified.tenant_id,
       tier: verified.tier
     }, status: :ok
+  end
+
+  # DELETE /sso/sign_out (drawn with AUTH_MODE=external, where it is `destroy_user_session`)
+  def destroy
+    sign_out(:user)
+
+    redirect_to root_path
   end
 
   private
@@ -104,7 +112,7 @@ class JwtSsoHandoffController < ApplicationController
     service = handoff_service
     verified =
       begin
-        raise JwtSso::HandoffService::NotConfiguredError unless JwtSso::Config.enabled?
+        raise JwtSso::HandoffService::NotConfiguredError unless Extensions.configured?(:auth)
 
         service.verify_handoff(token, expected_nonce: consume_state!)
       rescue JwtSso::HandoffService::HandoffError => e
@@ -119,13 +127,22 @@ class JwtSsoHandoffController < ApplicationController
   end
 
   def handoff_service
-    @handoff_service ||= JwtSso::HandoffService.new
+    # The auth_provider port; stock is JwtSso::HandoffService.
+    @handoff_service ||= Extensions.auth
   end
 
   def handle_handoff_error(error)
     respond_to do |format|
       format.html do
-        redirect_to(new_user_session_path(reason: 'sso-failed', code: error.code))
+        if Extensions.external_auth?
+          # There is no local sign-in page to go back to (and the sign-in route would
+          # start the flow again), so say what happened and offer a retry.
+          render html: helpers.safe_join([helpers.tag.p("Sign-in failed (#{error.code})."),
+                                          helpers.link_to('Try again', jwt_sso_start_path)]),
+                 status: error.http_status, layout: false
+        else
+          redirect_to(new_user_session_path(reason: 'sso-failed', code: error.code))
+        end
       end
       format.any do
         render json: problem_detail(error), status: error.http_status, content_type: 'application/problem+json'

@@ -27,6 +27,7 @@ class DashboardController < ApplicationController
 
   def maybe_redirect_mfa_setup
     return unless signed_in?
+    return if Extensions.external_auth?
     return if current_user.otp_required_for_login
 
     return if !current_user.otp_required_for_login && !AccountConfig.exists?(value: true,

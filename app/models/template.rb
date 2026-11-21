@@ -49,6 +49,8 @@ class Template < ApplicationRecord
 
   before_validation :maybe_set_default_folder, on: :create
 
+  after_create_commit { Extensions.emit('template.created', { account_id:, template_id: id }) }
+
   attribute :preferences, :string, default: -> { {} }
   attribute :fields, :string, default: -> { [] }
   attribute :schema, :string, default: -> { [] }

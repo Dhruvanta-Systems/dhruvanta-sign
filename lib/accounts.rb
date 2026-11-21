@@ -147,6 +147,7 @@ module Accounts
 
   def can_send_emails?(_account, **_params)
     return true if Docuseal.multitenant?
+    return true if Extensions.hosted? # mail goes to the notifier, not to a per-account SMTP server
     return true if Rails.env.development?
     return true if ENV['SMTP_ADDRESS'].present?
 

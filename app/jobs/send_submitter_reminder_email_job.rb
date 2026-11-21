@@ -15,6 +15,8 @@ class SendSubmitterReminderEmailJob
     reminder_count = submitter.submission_events.where(event_type: 'send_reminder_email').count
     return if reminder_count >= MAX_REMINDERS
 
+    return unless Extensions::Gate.send_allowed?(submitter.account)
+
     SubmitterMailer.invitation_email(submitter).deliver_later!
     SubmissionEvent.create!(submitter:, submission: submitter.submission, event_type: 'send_reminder_email',
                             data: { reminder_number: reminder_count + 1 })

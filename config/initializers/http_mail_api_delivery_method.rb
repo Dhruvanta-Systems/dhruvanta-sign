@@ -21,6 +21,7 @@ Rails.application.config.to_prepare do
   )
 end
 
-if ENV.fetch('MAIL_API_ENABLED', 'false').to_s.downcase == 'true'
+# In hosted mode every mail goes to the notifier instead (see config/initializers/extensions.rb).
+if ENV.fetch('MAIL_API_ENABLED', 'false').to_s.downcase == 'true' && !Extensions.hosted?
   Rails.application.config.action_mailer.delivery_method = :http_mail_api
 end

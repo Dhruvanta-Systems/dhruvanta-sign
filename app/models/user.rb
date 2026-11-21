@@ -90,6 +90,8 @@ class User < ApplicationRecord
   attribute :role, :string, default: ADMIN_ROLE
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
 
+  after_create_commit { Extensions.emit('user.created', { account_id:, user_id: id }) }
+
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
   scope :admins, -> { where(role: ADMIN_ROLE) }

@@ -5,16 +5,23 @@
       <%= t('plans') %>
     </h1>
     <p class="text-base-content/70 mb-6">
-      The plan below is assigned by the administrator of this server.
+      The plan below is reported by the plan provider of this server.
     </p>
 
-    <% plan = SubscriptionPlans.find(@current_plan) %>
     <div class="rounded-2xl border border-base-300 bg-base-100 p-5">
-      <h2 class="text-2xl font-bold"><%= plan[:title] %></h2>
+      <h2 class="text-2xl font-bold"><%= @plan.title.presence || @plan.name.to_s.titleize %></h2>
+      <% if @plan.suspended? %>
+        <p class="mt-2 text-sm text-error">This account is suspended.</p>
+      <% elsif @plan.unavailable? %>
+        <p class="mt-2 text-sm text-warning">The plan service is unavailable right now.</p>
+      <% end %>
       <div class="mt-4 space-y-2 text-sm">
-        <p>Documents: <strong><%= plan[:docs] %></strong></p>
-        <p>Users: <strong><%= plan[:users] %></strong></p>
-        <p>API: <strong><%= plan[:api] ? 'Included' : 'Not included' %></strong></p>
+        <% @plan.limits.each do |key, limit| %>
+          <p><%= key.to_s.humanize %>: <strong><%= limit.nil? ? 'Unlimited' : "#{@usage[key]} / #{limit}" %></strong></p>
+        <% end %>
+        <% if @plan.limits.empty? %>
+          <p>No limits are set for this plan.</p>
+        <% end %>
       </div>
     </div>
   </div>

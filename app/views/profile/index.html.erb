@@ -56,7 +56,7 @@
     <a href="<%= edit_user_initials_path %>" data-turbo-frame="modal" data-native-modal="medium" aria-label="<%= t('update_initials') %>" class="base-button w-full">
       <%= t('update_initials') %>
     </a>
-    <% if true_user == current_user && !current_account.testing? %>
+    <% if true_user == current_user && !current_account.testing? && !Extensions.external_auth? %>
       <p class="text-2xl font-bold mt-8 mb-4">
         <%= t('change_password') %>
       </p>

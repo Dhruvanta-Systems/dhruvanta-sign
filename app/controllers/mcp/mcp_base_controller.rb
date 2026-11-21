@@ -2,6 +2,8 @@
 
 module Mcp
   class McpBaseController < ActionController::API
+    include SendRateLimited
+
     wrap_parameters false
 
     before_action :authenticate_user!
@@ -14,6 +16,14 @@ module Mcp
 
     rescue_from CanCan::AccessDenied do
       render_error(-32_603, 'Forbidden', status: :forbidden)
+    end
+
+    rescue_from Extensions::GateError do |e|
+      render_tool_error(e.message)
+    end
+
+    rescue_from RateLimit::LimitApproached do
+      render_tool_error('Too many requests')
     end
 
     rescue_from ActiveRecord::RecordNotFound do

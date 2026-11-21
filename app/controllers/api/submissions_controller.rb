@@ -13,6 +13,7 @@ module Api
       authorize!(:create, Submission)
     end
 
+    before_action :enforce_send_rate_limit!, only: :create
     before_action :maybe_return_template_error, only: :create
 
     def index

@@ -82,14 +82,86 @@ to a single receiver: `WEBHOOK_OUTBOX_URL`, signed with HMAC-SHA256 using
 carry `external_tenant_id` and `external_user_id` when SSO provided them; rename
 the fields with `WEBHOOK_OUTBOX_TENANT_FIELD` and `WEBHOOK_OUTBOX_USER_FIELD`.
 
-## Optional external plan service
+## Extension ports
 
-`PREMIUM_SERVICE_URL` (with `PREMIUM_API_TOKEN`) points the plan, subscription
-and video-KYC features at an external service. It is unset by default. When set,
-the app sends plan lookups and event notifications (including submitter email
-addresses and phone numbers for `form.completed` and `submission.completed`, sent when a
-submitter finishes) to that service, so treat it as a deliberate transfer of
-personal data to a processor you control.
+Everything an operator usually wants to supply is a named port (`lib/extensions.rb`).
+With nothing registered each port has a stock default and the app behaves like
+upstream.
+
+| Port (short name) | Interface name | Methods |
+|---|---|---|
+| `auth` | `auth_provider` | `verify_handoff(token, expected_nonce:)`, `lookup_or_provision_user(handoff)`, `audit_received`, `audit_failed` |
+| `notifier` | `notifier` | `deliver(channel:, to:, subject:, html:, text:, template_key:, vars:, attachments:, ...)` |
+| `otp` | `otp_provider` | `send_code(subject:, purpose:, channel:, to:, locale:, account_id:)`, `verify(subject:, code:, purpose:)` |
+| `plan` | `plan_provider` | `account_plan(account_id)` returning `{ plan:, status:, features:, limits: { docs:, users:, templates:, sends: }, suspended: }` |
+| `storage` | `storage_service` | `name` (an Active Storage service) |
+| `event_sink` | `event_sink` | `emit(event, payload)` |
+| `verification` | `verification_provider` | `start(payload)`, `status(submitter_slug)` |
+| `payment_step` | `payment_step_provider` | `create(submitter, field)`, `status(session_id)` |
+
+Reference fakes of every port, usable as a starting point, are in
+`spec/support/extensions/`.
+
+Register an adapter in process from a file in `config/extensions.d/` (loaded at
+boot, in name order):
+
+```ruby
+Extensions.register(:notifier, MyNotifier.new)
+```
+
+Or let the HTTP implementation (`PremiumBridge`) supply ports from a server that
+speaks a small JSON contract. `PREMIUM_SERVICE_URL` (with `PREMIUM_API_TOKEN`,
+sent as `X-Premium-Token`) is unset by default; `EXTENSIONS_HTTP_PORTS` chooses the
+ports it supplies (default `plan,event_sink,verification`):
+
+| Port | Request |
+|---|---|
+| `plan` | `GET /api/premium/account/:id/plan` |
+| `event_sink` | `POST /api/hooks/:event` (JSON body; `submitter.completed` is sent as `form.completed`) |
+| `verification` | `POST /api/video-kyc/session`, `GET /api/video-kyc/status/:slug` |
+| `notifier` | `POST /api/notifications` (attachments as `content_base64`) |
+| `otp` | `POST /api/otp/send`, `POST /api/otp/verify` (answers `{ "verified": true }`) |
+
+When set, the app sends plan lookups and event notifications (including submitter
+email addresses and phone numbers for `form.completed` and `submission.completed`,
+sent when a submitter finishes) to that service, so treat it as a deliberate
+transfer of personal data to a processor you control.
+
+### Plan gate
+
+The plan answer is cached per account for `PLAN_CACHE_TTL_SECONDS` (default 60).
+When the provider fails, the last answer is used for up to `PLAN_MAX_STALE_SECONDS`
+(default 3600); after that every gated action fails closed. Limits are checked
+before the cost is incurred: submissions (`docs`, per calendar month) when a
+submission is created, and `sends` (invitations, reminders, per calendar month)
+before a message goes out. A limit the plan does not name is unlimited. A plan
+with `suspended: true` (or status `suspended`) cannot create or send anything. The
+API answers 402 for a reached quota, 403 for a suspended account and 503 when the
+plan service is unavailable. There are no bundled plans or prices.
+
+### Rate limits
+
+`HOSTED_MODE=true` (or `ABUSE_CONTROLS=true`) limits creating submissions and
+sending, per account (`RATE_LIMIT_ACCOUNT`, default 60) and per IP address
+(`RATE_LIMIT_IP`, default 120) in a 10 minute window. The counters are per process:
+put a shared limit in front of several app servers.
+
+### External sign-in
+
+`AUTH_MODE=external` does not draw the local sign-in, password, reset, invitation,
+setup and two-factor routes at all. People sign in only through the generic JWT
+handoff (`/sso/start`, `/sso/handoff`); an account is created on first sign-in.
+Local users cannot be created or invited.
+
+### Hosted mode
+
+`HOSTED_MODE=true` refuses to boot unless the `auth`, `notifier`, `otp`, `plan` and
+`storage` ports are configured, no local auth route is drawn, SMTP is not
+configured and storage is not the local disk. In hosted mode every mail goes to
+the `notifier` (no allow-list, no SMTP fallback, attachments carried; a failure
+raises), signer one-time codes come from the `otp_provider` (the local code module
+raises `OtpChallenges::NotConfigured`), and the per-account SMTP, storage and SMS
+settings screens are removed.
 
 ## Audit export is single-consumer
 

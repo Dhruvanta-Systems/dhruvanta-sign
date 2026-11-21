@@ -27,8 +27,7 @@ class SendSubmissionEmailController < ApplicationController
 
     if @submitter && completed_submitter?(@submitter)
       RateLimit.call("send-email-#{@submitter.id}", limit: 2, ttl: 5.minutes)
-
-      SubmitterMailer.documents_copy_email(@submitter, sig: true).deliver_later! if can_send?(@submitter)
+      send_copy(@submitter)
     end
 
     respond_to do |f|
@@ -38,6 +37,12 @@ class SendSubmissionEmailController < ApplicationController
   end
 
   private
+
+  def send_copy(submitter)
+    enforce_send_rate_limit_for!(submitter.account)
+
+    SubmitterMailer.documents_copy_email(submitter, sig: true).deliver_later! if can_send?(submitter)
+  end
 
   def completed_submitter?(submitter)
     submitter.completed_at? || (submitter.viewer? && submitter.submission.completed_at?)

@@ -12,6 +12,8 @@ require 'rails/health_controller'
 
 require_relative '../lib/api_path_consider_json_middleware'
 require_relative '../lib/normalize_client_ip_middleware'
+# Read by the initializers (and extensions.d adapters), which run before autoloading is available.
+require_relative '../lib/extensions'
 
 Bundler.require(*Rails.groups)
 

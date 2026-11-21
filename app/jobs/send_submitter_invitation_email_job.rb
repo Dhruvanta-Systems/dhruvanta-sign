@@ -19,6 +19,10 @@ class SendSubmitterInvitationEmailJob
       return
     end
 
+    # Checked before the mail is built or sent: a suspended account, a reached
+    # quota or an unreachable plan service sends nothing.
+    return unless Extensions::Gate.send_allowed?(submitter.account)
+
     mail =
       if submitter.viewer?
         SubmitterMailer.invitation_view_email(submitter)

@@ -8,6 +8,9 @@ class SubmissionsResendEmailController < ApplicationController
     authorize!(:update, @submission)
   end
 
+  before_action :enforce_send_rate_limit!, only: :create
+  before_action -> { Extensions::Gate.check_send!(current_account) }, only: :create
+
   def create
     submitters = @submission.submitters.reject(&:completed_at?).select { |s| s.email.present? && !s.declined_at? }
 

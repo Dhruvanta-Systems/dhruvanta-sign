@@ -3,6 +3,9 @@
 class SubmittersSendEmailController < ApplicationController
   load_and_authorize_resource :submitter
 
+  before_action :enforce_send_rate_limit!, only: :create
+  before_action -> { Extensions::Gate.check_send!(current_account) }, only: :create
+
   def create
     authorize!(:update, @submitter)
 

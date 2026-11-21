@@ -48,15 +48,23 @@ class ProcessSubmitterCompletionJob
 
     enqueue_completed_webhooks(submitter, is_last:)
 
-    notify_premium_service(submitter, is_last:)
+    notify_extensions(submitter, is_last:)
   end
 
-  def notify_premium_service(submitter, is_last:)
-    PremiumBridge.notify_form_completed(submitter)
-    PremiumBridge.notify_submission_completed(submitter.submission) if is_last
-  rescue StandardError => e
-    Rollbar.error(e) if defined?(Rollbar)
-    Rails.logger.warn("PremiumBridge notify failed: #{e.class}")
+  def notify_extensions(submitter, is_last:)
+    Extensions.emit('submitter.completed', form_completed_payload(submitter))
+    Extensions.emit('submission.completed', { account_id: submitter.account_id, submission_id: submitter.submission_id }) if is_last
+  end
+
+  def form_completed_payload(submitter)
+    {
+      account_id: submitter.account_id,
+      submitter_id: submitter.id,
+      submission_id: submitter.submission_id,
+      email: submitter.email,
+      phone: submitter.phone,
+      document_hash: submitter.documents.first&.metadata&.dig('sha256')
+    }
   end
 
   def create_completed_submitter!(submitter)

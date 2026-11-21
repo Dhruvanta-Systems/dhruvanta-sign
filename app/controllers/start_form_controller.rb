@@ -14,6 +14,7 @@ class StartFormController < ApplicationController
   before_action :maybe_redirect_com, only: %i[show completed]
   before_action :load_template
   before_action :authorize_start!, only: :update
+  before_action -> { enforce_send_rate_limit_for!(@template.account) }, only: :update
 
   def show
     if @template.preferences['require_phone_2fa'] || @template.preferences['require_email_2fa']

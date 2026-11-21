@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
+# The local one-time code store. In hosted mode the codes come from the otp_provider
+# (see SignerOtp) and this module must not be used: it raises NotConfigured.
 module OtpChallenges
+  NotConfigured = Class.new(StandardError)
+
   CODE_TTL = 10.minutes
   REUSE_MIN_TTL = 5.minutes
   MAX_ATTEMPTS = 20
@@ -10,6 +14,8 @@ module OtpChallenges
   module_function
 
   def generate(value, purpose:)
+    ensure_local!
+
     key = build_key(value, purpose)
     latest_challenge = OtpChallenge.where(key:).order(version: :desc).first
 
@@ -27,6 +33,8 @@ module OtpChallenges
   end
 
   def verify(code, value, purpose:)
+    ensure_local!
+
     challenges = OtpChallenge.where(key: build_key(value, purpose))
 
     recent_challenges = challenges.where(expire_at: ATTEMPTS_WINDOW.ago..).order(version: :desc).to_a
@@ -47,6 +55,10 @@ module OtpChallenges
 
       false
     end
+  end
+
+  def ensure_local!
+    raise NotConfigured, 'local one-time codes are off in hosted mode; use the otp_provider' if Extensions.hosted?
   end
 
   def build_key(value, purpose)

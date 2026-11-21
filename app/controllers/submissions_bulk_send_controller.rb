@@ -3,6 +3,7 @@
 class SubmissionsBulkSendController < ApplicationController
   before_action :load_template
   before_action -> { require_premium_feature!('bulk_send') }
+  before_action :enforce_send_rate_limit!, only: :create
 
   def new
     authorize!(:create, Submission)

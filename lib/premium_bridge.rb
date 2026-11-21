@@ -1,15 +1,20 @@
 # frozen_string_literal: true
 
-# Bridge to the optional premium service.
+# Default HTTP implementation of the extension ports (see Extensions::Http), for any
+# server that speaks the small JSON contract documented there.
 # If PREMIUM_SERVICE_URL is not set, all methods return defaults (features disabled).
-# Resilient: retries on connection failure, circuit breaker on repeated failures,
-# graceful degradation — app works without premium service.
+# Resilient: circuit breaker on repeated failures, graceful degradation — app works
+# without the service. The `!` methods raise Unavailable instead of degrading, for
+# callers (the plan cache, the notifier) that must tell an outage from an answer.
 module PremiumBridge
+  Unavailable = Class.new(StandardError)
+
   TIMEOUT = 3
   RETRY_COUNT = 2
   RETRY_INTERVAL = 0.5
   CIRCUIT_THRESHOLD = 5      # failures before opening circuit
   CIRCUIT_RESET_TIME = 30    # seconds before retrying after circuit opens
+  STRICT_POST_TIMEOUT = 20   # seconds; notifications can carry attachments
 
   @failure_count = 0
   @circuit_open_at = nil
@@ -25,6 +30,27 @@ module PremiumBridge
     return default_plan unless enabled?
 
     safe_request { connection.get("/api/premium/account/#{segment(account_id)}/plan") }
+  end
+
+  # The plan of an account, or Unavailable when the service cannot be reached or
+  # does not answer with a success. Unlike plan_for it never invents a default.
+  def fetch_plan!(account_id)
+    raise Unavailable, 'service is not configured' unless enabled?
+
+    strict_request { connection.get("/api/premium/account/#{segment(account_id)}/plan") }
+  end
+
+  # POST a JSON body to one of the fixed extension paths and return the parsed
+  # answer ({} for an empty one). Raises Unavailable on any failure.
+  def post_strict!(path, body)
+    raise Unavailable, 'service is not configured' unless enabled?
+
+    strict_request do
+      connection.post(path) do |req|
+        req.options.timeout = STRICT_POST_TIMEOUT
+        req.body = JSON.generate(normalize_request_payload(body))
+      end
+    end
   end
 
   def notify(event, payload)
@@ -111,6 +137,26 @@ module PremiumBridge
     end
   rescue Faraday::Error, ArgumentError => e
     handle_failure(e, fire_and_forget, default_response)
+  end
+
+  private_class_method def self.strict_request
+    @mutex.synchronize do
+      raise Unavailable, 'circuit open' if @circuit_open_at && (Time.now - @circuit_open_at) < CIRCUIT_RESET_TIME
+
+      if @circuit_open_at
+        @circuit_open_at = nil
+        @failure_count = 0
+      end
+    end
+
+    resp = yield
+    raise Unavailable, "status #{resp.status}" unless resp.success?
+
+    @mutex.synchronize { @failure_count = 0 }
+    resp.body.to_s.strip.empty? ? {} : normalize_response(JSON.parse(resp.body))
+  rescue Faraday::Error, JSON::ParserError => e
+    handle_failure(e, true, nil)
+    raise Unavailable, e.class.name
   end
 
   private_class_method def self.handle_failure(error, fire_and_forget, default_response)

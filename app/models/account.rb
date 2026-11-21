@@ -75,12 +75,4 @@ class Account < ApplicationRecord
     super || build_default_template_folder(name: TemplateFolder::DEFAULT_NAME,
                                            author_id: users.minimum(:id)).tap(&:save!)
   end
-
-  def current_plan
-    subscription&.plan || 'free'
-  end
-
-  def plan_config
-    SubscriptionPlans.find(current_plan)
-  end
 end

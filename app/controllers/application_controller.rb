@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ApplicationController < ActionController::Base
+  include SendRateLimited
+
   BROWSER_LOCALE_REGEXP = /\A\w{2}(?:-\w{2})?/
 
   include ActiveStorage::SetCurrent
@@ -22,7 +24,6 @@ class ApplicationController < ActionController::Base
                 :true_ability,
                 :form_link_host,
                 :svg_icon,
-                :current_plan_data,
                 :premium_feature?,
                 :browser_os,
                 :turbo_native_ios?,
@@ -32,6 +33,11 @@ class ApplicationController < ActionController::Base
 
   rescue_from Pagy::RangeError do
     redirect_to request.path
+  end
+
+  # The plan gate (quota reached, account suspended, plan service unavailable).
+  rescue_from Extensions::GateError do |e|
+    redirect_back_or_to root_path, alert: e.message
   end
 
   rescue_from RateLimit::LimitApproached do |e|
@@ -144,6 +150,8 @@ class ApplicationController < ActionController::Base
   end
 
   def maybe_redirect_to_setup
+    return if Extensions.external_auth?
+
     redirect_to setup_index_path unless User.exists?
   end
 
@@ -193,22 +201,8 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def current_plan_data
-    @current_plan_data ||= PremiumBridge.plan_for(current_account&.id)
-  end
-
   def premium_feature?(feature)
-    return false unless PremiumBridge.enabled?
-
-    return false unless current_plan_data['status'].to_s == 'active'
-
-    features = current_plan_data['features']
-    if features.is_a?(Hash) && (features['features']&.include?('all') || features['features']&.include?(feature.to_s))
-      return true
-    end
-    return true if features.is_a?(Array) && (features.include?('all') || features.include?(feature.to_s))
-
-    false
+    Extensions.feature?(current_account, feature)
   end
 
   def require_premium_feature!(feature)

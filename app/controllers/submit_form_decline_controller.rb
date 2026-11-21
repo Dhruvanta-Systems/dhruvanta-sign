@@ -34,10 +34,17 @@ class SubmitFormDeclineController < ApplicationController
 
     WebhookUrls.enqueue_events(@submitter, 'form.declined')
 
+    emit_declined(@submitter)
+
     redirect_to submit_form_path(@submitter.slug)
   end
 
   private
+
+  def emit_declined(submitter)
+    Extensions.emit('submission.declined', { account_id: submitter.account_id, submitter_id: submitter.id,
+                                             submission_id: submitter.submission_id })
+  end
 
   def declining_disabled?
     @submitter.account.account_configs.find_by(key: AccountConfig::ALLOW_TO_DECLINE_KEY)&.value == false

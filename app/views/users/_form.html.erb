@@ -47,6 +47,6 @@
     <%= f.button button_title, class: 'base-button' %>
   </div>
 <% end %>
-<% if user.persisted? %>
+<% if user.persisted? && !Extensions.external_auth? %>
   <%= button_to nil, user_send_reset_password_path(user), id: 'resend_password_button', method: :put, class: 'hidden', data: { turbo_confirm: t('are_you_sure_'), turbo_frame: :_top } %>
 <% end %>

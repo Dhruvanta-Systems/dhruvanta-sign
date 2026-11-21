@@ -13,7 +13,7 @@ class SubmitFormEmail2fasController < ApplicationController
 
     value = [@submitter.email.downcase.squish, @submitter.slug].join(':')
 
-    if OtpChallenges.verify(params[:one_time_code].to_s.gsub(/\D/, ''), value, purpose: 'form_email_2fa')
+    if SignerOtp.verify(params[:one_time_code].to_s.gsub(/\D/, ''), value)
       SubmissionEvents.create_with_tracking_data(@submitter, 'email_verified', request, { email: @submitter.email })
 
       cookies.encrypted[:email_2fa_slug] =

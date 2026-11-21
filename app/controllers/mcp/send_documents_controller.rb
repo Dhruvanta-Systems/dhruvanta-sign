@@ -68,6 +68,8 @@ module Mcp
 
     # rubocop:disable-next Metrics
     def call
+      enforce_send_rate_limit!
+
       @template = Template.accessible_by(current_ability).find(mcp_params['template_id'])
 
       authorize!(:read, @template)

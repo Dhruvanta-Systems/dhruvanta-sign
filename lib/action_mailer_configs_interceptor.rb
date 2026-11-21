@@ -7,6 +7,10 @@ module ActionMailerConfigsInterceptor
   module_function
 
   def delivering_email(message)
+    # Hosted mode: every mail goes to the notifier. No per-account SMTP, no sender
+    # rewriting from SMTP_FROM, no fallback.
+    return message if Extensions.hosted?
+
     return message unless Rails.env.production?
 
     if Docuseal.demo?

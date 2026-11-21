@@ -53,6 +53,53 @@ describe PremiumBridge do
     PremiumBridge.instance_variable_set(:@circuit_open_at, nil)
   end
 
+  describe 'strict calls (used by the extension ports)' do
+    before { configure_premium_service }
+
+    it 'raises Unavailable instead of inventing a free plan when the service is down' do
+      stub_request(:get, 'https://premium.example.test/api/premium/account/42/plan').to_return(status: 503)
+
+      expect { described_class.fetch_plan!(42) }.to raise_error(PremiumBridge::Unavailable)
+      expect(described_class.plan_for(42)).to include('plan' => 'free')
+    end
+
+    it 'raises Unavailable on a connection failure and opens the circuit after repeated ones' do
+      stub_request(:get, 'https://premium.example.test/api/premium/account/42/plan').to_timeout
+
+      PremiumBridge::CIRCUIT_THRESHOLD.times do
+        expect { described_class.fetch_plan!(42) }.to raise_error(PremiumBridge::Unavailable)
+      end
+
+      expect { described_class.fetch_plan!(42) }.to raise_error(PremiumBridge::Unavailable, /circuit open/)
+    end
+
+    it 'returns the plan when the service answers' do
+      stub_request(:get, 'https://premium.example.test/api/premium/account/42/plan')
+        .to_return(status: 200, body: '{"plan":"pro","limits":{"docs":5}}')
+
+      expect(described_class.fetch_plan!(42)).to eq('plan' => 'pro', 'limits' => { 'docs' => 5 })
+    end
+
+    it 'refuses without a configured service' do
+      ENV.delete('PREMIUM_SERVICE_URL')
+
+      expect { described_class.fetch_plan!(42) }.to raise_error(PremiumBridge::Unavailable, /not configured/)
+    end
+
+    it 'posts to a fixed path and accepts an empty answer' do
+      stub = stub_request(:post, 'https://premium.example.test/api/notifications').to_return(status: 204)
+
+      expect(described_class.post_strict!('/api/notifications', { to: ['a@example.test'] })).to eq({})
+      expect(stub).to have_been_requested
+    end
+
+    it 'raises Unavailable when a notification is refused' do
+      stub_request(:post, 'https://premium.example.test/api/notifications').to_return(status: 500)
+
+      expect { described_class.post_strict!('/api/notifications', {}) }.to raise_error(PremiumBridge::Unavailable)
+    end
+  end
+
   describe 'removed purchase calls' do
     it 'has no checkout or cancellation call left' do
       expect(described_class).not_to respond_to(:create_checkout)

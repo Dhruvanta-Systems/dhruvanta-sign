@@ -4,7 +4,8 @@
 # so that {Outbound::HttpMailApiDeliveryMethod} can route a mail to the HTTP mail
 # API. They carry internal account and user ids and, for the invitation mail, the
 # password-reset link. Mail transfer agents log headers, so they must never be
-# written onto a message that leaves over SMTP.
+# written onto a message that leaves over SMTP. The headers stay for the two
+# delivery methods that read them (the HTTP mail API and the hosted notifier).
 #
 # Registered after {ActionMailerConfigsInterceptor}, which may replace the
 # delivery method: by the time this runs, `message.delivery_method` is the final
@@ -21,7 +22,10 @@ module MailApiRoutingHeadersInterceptor
   module_function
 
   def delivering_email(message)
-    strip!(message) unless message.delivery_method.is_a?(Outbound::HttpMailApiDeliveryMethod)
+    delivery = message.delivery_method
+
+    strip!(message) unless delivery.is_a?(Outbound::HttpMailApiDeliveryMethod) ||
+                           delivery.is_a?(Extensions::NotifierDeliveryMethod)
 
     message
   end

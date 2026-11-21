@@ -14,12 +14,26 @@ Rails.application.routes.draw do
   get 'up' => 'rails/health#show'
   get 'manifest' => 'pwa#manifest'
 
-  devise_for :users, path: '/', only: %i[sessions passwords],
-                     controllers: { sessions: 'sessions', passwords: 'passwords' }
+  # AUTH_MODE=external: there is no local sign-in at all. The sessions, passwords,
+  # invitation, setup, two-factor and password-reset routes below are NOT DRAWN (not
+  # redirected), and people only sign in through the JWT handoff further down.
+  # `new_user_session` and `destroy_user_session` are kept as names for the handoff's
+  # start and sign-out routes so that the rest of the app (and Devise's own
+  # "please sign in" redirect) keeps working without a local login page.
+  external_auth = Extensions.external_auth?
 
-  devise_scope :user do
-    resource :invitation, only: %i[update] do
-      get '' => :edit
+  if external_auth
+    devise_for :users, skip: :all
+    get '/sso/start' => 'jwt_sso_handoff#start', as: :new_user_session
+    delete '/sso/sign_out' => 'jwt_sso_handoff#destroy', as: :destroy_user_session
+  else
+    devise_for :users, path: '/', only: %i[sessions passwords],
+                       controllers: { sessions: 'sessions', passwords: 'passwords' }
+
+    devise_scope :user do
+      resource :invitation, only: %i[update] do
+        get '' => :edit
+      end
     end
   end
 
@@ -65,7 +79,7 @@ Rails.application.routes.draw do
   end
 
   resources :verify_pdf_signature, only: %i[create]
-  resource :mfa_setup, only: %i[show new edit create destroy], controller: 'mfa_setup'
+  resource :mfa_setup, only: %i[show new edit create destroy], controller: 'mfa_setup' unless external_auth
   resources :account_configs, only: %i[create destroy]
   resources :account_custom_fields, only: %i[create]
   resources :user_configs, only: %i[create]
@@ -74,10 +88,14 @@ Rails.application.routes.draw do
   resources :dashboard, only: %i[index]
   resources :analytics, only: %i[index]
   resources :search, only: %i[index]
-  resources :setup, only: %i[index create]
+  resources :setup, only: %i[index create] unless external_auth
   resource :newsletter, only: %i[show update]
-  resources :users, only: %i[new create edit update destroy] do
-    resource :send_reset_password, only: %i[update], controller: 'users_send_reset_password'
+  # With external sign-in people are not created or invited here (and have no local
+  # password to reset); they appear on first sign-in.
+  resources :users, only: external_auth ? %i[edit update destroy] : %i[new create edit update destroy] do
+    unless external_auth
+      resource :send_reset_password, only: %i[update], controller: 'users_send_reset_password'
+    end
   end
   resource :user_signature, only: %i[edit update destroy]
   resource :user_initials, only: %i[edit update destroy]
@@ -207,16 +225,17 @@ Rails.application.routes.draw do
 
   scope '/settings', as: :settings do
     unless Docuseal.multitenant?
-      resources :storage, only: %i[index create], controller: 'storage_settings'
+      # Hosted mode: storage, SMS and SMTP are the operator's (ports), not the account's.
+      resources :storage, only: %i[index create], controller: 'storage_settings' unless Extensions.hosted?
       resources :search_entries_reindex, only: %i[create]
-      resources :sms, only: %i[index create], controller: 'sms_settings'
+      resources :sms, only: %i[index create], controller: 'sms_settings' unless Extensions.hosted?
       resources :mcp, only: %i[index new create destroy], controller: 'mcp_settings'
     end
     if Docuseal.demo? || !Docuseal.multitenant?
       resources :api, only: %i[index create], controller: 'api_settings'
       resource :reveal_access_token, only: %i[show create], controller: 'reveal_access_token'
     end
-    resources :email, only: %i[index create destroy], controller: 'email_smtp_settings'
+    resources :email, only: %i[index create destroy], controller: 'email_smtp_settings' unless Extensions.hosted?
     resources :sso, only: %i[index create], controller: 'sso_settings'
     resources :notifications, only: %i[index create], controller: 'notifications_settings'
     resource :esign, only: %i[show create new update destroy], controller: 'esign_settings'
@@ -239,7 +258,7 @@ Rails.application.routes.draw do
     resources :profile, only: %i[index] do
       collection do
         patch :update_contact
-        patch :update_password
+        patch :update_password unless external_auth
         patch :update_app_url
       end
     end
